@@ -1,0 +1,57 @@
+# --- Python Basics ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- uv & Environments ---
+# We ignore the virtual environment directory itself
+.venv/
+venv/
+ENV/
+
+# --- AI & Data Science ---
+# Ignore large model files or local datasets
+*.pt
+*.pth
+*.bin
+*.pkl
+*.h5
+data/
+models/
+.ipynb_checkpoints/
+
+# --- Environment Secrets (CRITICAL) ---
+# This is where you will keep your API keys (OpenAI, Anthropic, etc.)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- PyCharm / IDEs ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Logs ---
+*.log
+logs/
