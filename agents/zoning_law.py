@@ -1,14 +1,58 @@
-from langchain_core.messages import AIMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from config import NodeName
+from config.llm import base_model
 from schema.state import OverallGraphState
 
-def mock_zoning_law_node(state: OverallGraphState):
+# Local control toggle for this specific node
+use_mock = True
+
+def zoning_law_agent_node(state: OverallGraphState):
     """
-    Mock Zoning Law Agent: Simulates querying local city ordinances and municipal codes
-    using the extracted state variables to verify land use constraints.
+    Zoning Law Agent: Coordinates municipal ordinance and regulatory compliance lookup.
+    Granularly routes between mock records and a live compliance/LLM parsing pipeline.
     """
-    # Simulating a regulatory database check based on state.city
+    # Guard Clause Check
+    if use_mock:
+        return _get_zoning_law_mock_response(state)
+
+    # --- Live AI Reasoning Path ---
+    target_city = state.city
+
+    # Step 2: Query municipal rules (Usually via web search tools or local policy PDF vector stores)
+    # This placeholder shows how your live agent processes complex land-use laws:
+    ai_response = base_model.invoke([
+        SystemMessage(
+            content=(
+                "You are an expert real estate attorney and municipal zoning specialist. "
+                "Your job is to look up and parse local city ordinances, building codes, "
+                "density caps, height restrictions, and short-term rental (STR) legal frameworks "
+                "for a specified city. Provide an objective legal compliance breakdown."
+            )
+        ),
+        HumanMessage(
+            content=f"Analyze municipal codes, land-use zoning restrictions, and short-term rental rules for '{target_city}'."
+        )
+    ])
+
+    # Step 3: Return the updated state payload with live regulatory insight data
+    return {
+        "zoning_laws": ai_response.content,
+        "messages": [
+            AIMessage(
+                content="Zoning Law Agent: Completed live municipal registry scanning and regulatory parsing.",
+                name=NodeName.ZONING_LAW_AGENT.value
+            )
+        ]
+    }
+
+
+# --- PRIVATELY SCORED MOCK PROVIDER ---
+def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
+    """
+    Returns a static state-update payload mimicking a
+    successful compliance registry tool database check.
+    """
     mock_zoning_result = (
         f"Municipal Ordinance & Land-Use Registry Check for {state.city}:\n"
         "- Brickell (Zone T6-48-O / High-Density Core): Allows maximum 48 stories. Mixed-use commercial/residential overlay. "
@@ -22,7 +66,7 @@ def mock_zoning_law_node(state: OverallGraphState):
         "zoning_laws": mock_zoning_result,
         "messages": [
             AIMessage(
-                content="Zoning Law Agent: Checked municipal land-use registries. Parsed density caps and short-term rental rules.",
+                content="[MOCK] Zoning Law Agent: Checked municipal land-use registries. Parsed density caps and short-term rental rules.",
                 name=NodeName.ZONING_LAW_AGENT.value
             )
         ]

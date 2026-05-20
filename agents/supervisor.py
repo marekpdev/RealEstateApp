@@ -3,7 +3,7 @@ from langchain_core.messages import AIMessage
 from config import NodeName
 from schema.state import OverallGraphState
 
-def supervisor_node(state: OverallGraphState):
+def supervisor_agent_node(state: OverallGraphState):
     """
         Deterministic Supervisor: Acts as a structural traffic controller.
         No LLM call is required here because the routing path is static.

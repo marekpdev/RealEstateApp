@@ -4,22 +4,22 @@ from config import NodeName
 from schema import OverallGraphState
 from agents import (
     ingest_input_agent_node,
-    mock_market_data_node,
-    mock_neighborhood_vibe_node,
-    mock_zoning_law_node,
-    mock_financial_modeler_node,
-    supervisor_node,
+    supervisor_agent_node,
+    market_data_agent_node,
+    neighborhood_vibe_agent_node,
+    zoning_law_agent_node,
+    financial_modeler_agent_node,
 )
 
 graph = StateGraph(OverallGraphState)
 
 # Register all nodes
 graph.add_node(NodeName.INGEST_INPUT_AGENT, ingest_input_agent_node)
-graph.add_node(NodeName.SUPERVISOR_AGENT, supervisor_node)
-graph.add_node(NodeName.MARKET_DATA_AGENT, mock_market_data_node)
-graph.add_node(NodeName.NEIGHBORHOOD_VIBE_AGENT, mock_neighborhood_vibe_node)
-graph.add_node(NodeName.ZONING_LAW_AGENT, mock_zoning_law_node)
-graph.add_node(NodeName.FINANCIAL_MODELER_AGENT, mock_financial_modeler_node)
+graph.add_node(NodeName.SUPERVISOR_AGENT, supervisor_agent_node)
+graph.add_node(NodeName.MARKET_DATA_AGENT, market_data_agent_node)
+graph.add_node(NodeName.NEIGHBORHOOD_VIBE_AGENT, neighborhood_vibe_agent_node)
+graph.add_node(NodeName.ZONING_LAW_AGENT, zoning_law_agent_node)
+graph.add_node(NodeName.FINANCIAL_MODELER_AGENT, financial_modeler_agent_node)
 
 # Wire the sequential intake
 graph.add_edge(START, NodeName.INGEST_INPUT_AGENT)

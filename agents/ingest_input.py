@@ -9,6 +9,7 @@ class IngestInputAgentOutput(BaseModel):
     city: str = Field(..., description="The city extracted from the user's input")
     budget: str = Field(..., description="The maximum budget extracted from the user's input")
 
+# Local control toggle for this specific node
 use_mock = True
 
 def ingest_input_agent_node(state: OverallGraphState):
@@ -51,6 +52,7 @@ def ingest_input_agent_node(state: OverallGraphState):
         ]
     }
 
+# --- PRIVATELY SCORED MOCK PROVIDER ---
 def _get_ingest_mock_response() -> dict:
     """
     Returns a static state-update payload mimicking a
