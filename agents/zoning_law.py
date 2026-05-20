@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage
 
-from state import OverallGraphState
+from schema.state import OverallGraphState
 
 def mock_zoning_law_node(state: OverallGraphState):
     """

@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage
 
-from state import OverallGraphState
+from schema.state import OverallGraphState
 
 def mock_market_data_node(state: OverallGraphState):
     """

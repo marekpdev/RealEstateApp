@@ -6,4 +6,11 @@ class NodeName(str, Enum):
     MARKET_DATA_AGENT = "market_data_agent"
     NEIGHBORHOOD_VIBE_AGENT = "neighborhood_vibe_agent"
     ZONING_LAW_AGENT = "zoning_law_agent"
-    FINANCIAL_MODELER = "financial_modeler_agent"
+    FINANCIAL_MODELER_AGENT = "financial_modeler_agent"
+
+class LLMModelType(str, Enum):
+    FAST_MODEL = "gpt-4o-mini"
+    COMPLEX_MODEL ="gpt-4o"
+
+class APIEndpoint(str, Enum):
+    GITHUB_MODELS = "https://models.inference.ai.azure.com"

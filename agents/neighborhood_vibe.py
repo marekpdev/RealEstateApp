@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage
 
-from state import OverallGraphState
+from schema.state import OverallGraphState
 
 def mock_neighborhood_vibe_node(state: OverallGraphState):
     """

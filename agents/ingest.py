@@ -1,7 +1,7 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-from llm import base_model
+from config.llm import base_model
 from pydantic import BaseModel, Field
-from state import OverallGraphState
+from schema.state import OverallGraphState
 
 class IngestAgentOutput(BaseModel):
     city: str = Field(..., description="The city extracted from the user's input")
