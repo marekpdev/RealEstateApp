@@ -1,4 +1,6 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+
+from config import NodeName
 from config.llm import base_model
 from pydantic import BaseModel, Field
 from schema.state import OverallGraphState
@@ -39,7 +41,7 @@ def ingest_input_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content=f"Ingest Node: Parsed city as '{extraction_result.city}' and budget as '{extraction_result.budget}'. Tracking parameters initialized.",
-                name="IngestNode"
+                name=NodeName.INGEST_AGENT.value
             )
         ]
     }
@@ -60,7 +62,7 @@ def mock_ingest_input_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content=f"Ingest Node: Parsed targeted market as '{mock_city}' and set investment ceiling to '{mock_budget}'.",
-                name="IngestNode"
+                name=NodeName.INGEST_AGENT.value
             )
         ]
     }

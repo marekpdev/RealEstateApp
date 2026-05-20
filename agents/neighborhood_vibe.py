@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage
 
+from config import NodeName
 from schema.state import OverallGraphState
 
 def mock_neighborhood_vibe_node(state: OverallGraphState):
@@ -20,7 +21,7 @@ def mock_neighborhood_vibe_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content="Neighborhood Vibe Agent: Completed vector embeddings search. Extracted community logs.",
-                name="VibeAgent"
+                name=NodeName.NEIGHBORHOOD_VIBE_AGENT.value
             )
         ]
     }

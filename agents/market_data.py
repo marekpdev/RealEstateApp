@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage
 
+from config import NodeName
 from schema.state import OverallGraphState
 
 def mock_market_data_node(state: OverallGraphState):
@@ -20,7 +21,7 @@ def mock_market_data_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content="Market Data Agent: Successfully scanned relational tables. Loaded matching listings into state.",
-                name="MarketAgent"
+                name=NodeName.MARKET_DATA_AGENT.value
             )
         ]
     }

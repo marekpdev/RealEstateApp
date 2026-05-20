@@ -1,6 +1,7 @@
 from langchain_core.messages import AIMessage
 
 from schema.state import OverallGraphState
+from config import NodeName
 
 def mock_financial_modeler_node(state: OverallGraphState):
     """
@@ -25,7 +26,7 @@ def mock_financial_modeler_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content="Financial Modeler Agent: Successfully generated the comprehensive prospectus report.",
-                name="FinancialModeler"
+                name=NodeName.FINANCIAL_MODELER_AGENT.value
             )
         ]
     }

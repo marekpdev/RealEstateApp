@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage
 
+from config import NodeName
 from schema.state import OverallGraphState
 
 def mock_zoning_law_node(state: OverallGraphState):
@@ -22,7 +23,7 @@ def mock_zoning_law_node(state: OverallGraphState):
         "messages": [
             AIMessage(
                 content="Zoning Law Agent: Checked municipal land-use registries. Parsed density caps and short-term rental rules.",
-                name="ZoningAgent"
+                name=NodeName.ZONING_LAW_AGENT.value
             )
         ]
     }
