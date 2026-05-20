@@ -3,29 +3,23 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from config import NodeName
 from config.llm import base_model
 from pydantic import BaseModel, Field
-from schema.state import OverallGraphState
-
-class IngestInputAgentOutput(BaseModel):
-    city: str = Field(..., description="The city extracted from the user's input")
-    budget: str = Field(..., description="The maximum budget extracted from the user's input")
+from schema.state import OverallGraphState, IngestInputAgentOutput
 
 # Local control toggle for this specific node
 use_mock = True
 
-def ingest_input_agent_node(state: OverallGraphState):
+def ingest_input_agent_node(state: OverallGraphState) -> dict:
     if use_mock:
         return _get_ingest_mock_response()
 
     # Step 1: Retrieve the raw human prompt from the input
-    # Because of the reducer, state.messages is guaranteed to contain the user's chat input
     user_message_content = state.messages[-1].content
 
     # Step 2: Bind the extraction schema to your LLM configuration
-    # This enforces that the JSON output mathematically matches IngestAgentOutput
     structured_llm = base_model.with_structured_output(IngestInputAgentOutput)
 
     # Step 3: Run the model to perform entity extraction
-    extraction_result = structured_llm.invoke([
+    extraction_result: IngestInputAgentOutput = structured_llm.invoke([
         SystemMessage(
             content=(
                 "You are a strict data-extraction gateway for a real estate investment engine. "
@@ -39,11 +33,9 @@ def ingest_input_agent_node(state: OverallGraphState):
         )
     ])
 
-    # Step 4: Construct and return the state update payload
-    # Note: We also append an AI message to the logs to keep track of what the Ingest agent did
+    # Step 4: Construct and return the state update payload nested under the correct state key
     return {
-        "city": extraction_result.city,
-        "budget": extraction_result.budget,
+        "ingest_input": extraction_result,
         "messages": [
             AIMessage(
                 content=f"Ingest Node: Parsed city as '{extraction_result.city}' and budget as '{extraction_result.budget}'. Tracking parameters initialized.",
@@ -52,21 +44,25 @@ def ingest_input_agent_node(state: OverallGraphState):
         ]
     }
 
+
 # --- PRIVATELY SCORED MOCK PROVIDER ---
 def _get_ingest_mock_response() -> dict:
     """
-    Returns a static state-update payload mimicking a
-    successful structural extraction.
+    Returns a static state-update payload verified by IngestInputAgentOutput,
+    nested under the correct key for OverallGraphState compatibility.
     """
-    mock_city = "Miami, FL"
-    mock_budget = "$600,000"
+    # Instantiate the structured output object explicitly
+    mock_payload = IngestInputAgentOutput(
+        city="Miami, FL",
+        budget="$600,000"
+    )
 
+    # Return the validated Pydantic object directly under 'ingest_input'
     return {
-        "city": mock_city,
-        "budget": mock_budget,
+        "ingest_input": mock_payload,
         "messages": [
             AIMessage(
-                content=f"[MOCK] Ingest Node: Parsed targeted market as '{mock_city}' and set investment ceiling to '{mock_budget}'.",
+                content=f"[MOCK] Ingest Node: Parsed targeted market as '{mock_payload.city}' and set investment ceiling to '{mock_payload.budget}'.",
                 name=NodeName.INGEST_INPUT_AGENT.value
             )
         ]
