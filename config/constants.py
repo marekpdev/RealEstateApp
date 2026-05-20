@@ -1,7 +1,7 @@
 from enum import Enum
 
 class NodeName(str, Enum):
-    INGEST_AGENT = "ingest_agent"
+    INGEST_INPUT_AGENT = "ingest_input_agent"
     SUPERVISOR_AGENT = "supervisor_agent"
     MARKET_DATA_AGENT = "market_data_agent"
     NEIGHBORHOOD_VIBE_AGENT = "neighborhood_vibe_agent"
