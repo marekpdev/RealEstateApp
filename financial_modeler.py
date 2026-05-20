@@ -4,24 +4,27 @@ from state import OverallGraphState
 
 def mock_financial_modeler_node(state: OverallGraphState):
     """
-    Mock Synthesizer Node: Reads the compiled text variables written by both
-    research nodes and produces the final investment report.
+    Mock Synthesizer Node: Reads ALL three worker buckets and combines them.
     """
-    # Access both data buckets populated by your parallel workers
-    listings_context = state.market_data
-    vibe_context = state.neighborhood_vibe
-
     final_report = (
         "### REAL ESTATE INVESTMENT PROSPECTUS REPORT ###\n\n"
-        f"Based on historical metrics ({listings_context}) and qualitative social indicators ({vibe_context}), "
-        f"the recommendation is a BUY for Brickell Ave due to superior cap rate margins, provided safety contingencies "
-        "for coastal flood pricing updates are calculated into the escrow layout."
+        f"Analysis for Market: {state.city}\n"
+        "--------------------------------------------------\n"
+        f"1. MARKET DATA LISTINGS:\n{state.market_data}\n\n"
+        f"2. COMMUNITY SENTIMENT:\n{state.neighborhood_vibe}\n\n"
+        f"3. REGULATORY & ZONING LAWS:\n{state.zoning_laws}\n\n"
+        "4. FINAL INVESTMENT VERDICT:\n"
+        "   - Brickell Avenue properties show a strong 6.2% cap rate, but the short-term rental restrictions "
+        "     mean you must operate this strictly as a long-term leasing asset to remain legally compliant."
     )
 
+    # print(f"Generated financial report for {state.city}: {final_report}")
+
     return {
+        "financial_report": final_report,
         "messages": [
             AIMessage(
-                content=final_report,
+                content="Financial Modeler Agent: Successfully generated the comprehensive prospectus report.",
                 name="FinancialModeler"
             )
         ]

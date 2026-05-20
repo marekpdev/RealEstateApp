@@ -3,8 +3,8 @@ from langchain_core.messages import HumanMessage
 from graph import compiledStateGraph
 
 if __name__ == "__main__":
-    query = input("Ask the Agent: ")
-    # query = "I would like to invest in Miami, FL, and my max budget is $200,000"
+    # query = input("Ask the Agent: ")
+    query = "I would like to invest in Miami, FL, and my max budget is $200,000"
 
     # LangGraph handles the loop automatically
     inputs = {"messages": [HumanMessage(content=query)]}

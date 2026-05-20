@@ -13,3 +13,7 @@ class OverallGraphState(BaseModel):
     # Storage buckets for your specialized researchers
     market_data: Optional[str] = Field(None, description="Raw real estate pricing & listing metrics from SQL.")
     neighborhood_vibe: Optional[str] = Field(None, description="Qualitative community sentiment analysis from RAG.")
+    zoning_laws: Optional[str] = Field(None, description="Local municipal zoning ordinances, density caps, and short-term rental laws.")
+
+    # The compiled outcome from the final synthesizer node
+    financial_report: Optional[str] = Field(None, description="The final synthesized real estate investment prospectus report.")
