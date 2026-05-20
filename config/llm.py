@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 from langchain_openai import ChatOpenAI
+from config import LLMModelType, APIEndpoint
 
 load_dotenv()
 
@@ -11,11 +12,8 @@ if key:
 else:
     print("Error: API Key not found. Check your .env file location.")
 
-# model = "gpt-4o"
-model = "gpt-4o-mini"
-
 base_model = ChatOpenAI(
-    model=model,
-    api_key=os.getenv("GITHUB_TOKEN"),
-    base_url="https://models.inference.ai.azure.com"
+    model= LLMModelType.FAST_MODEL.value,
+    api_key=key,
+    base_url=APIEndpoint.GITHUB_MODELS.value
 )
