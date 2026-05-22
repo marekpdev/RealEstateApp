@@ -15,6 +15,10 @@ ENV PATH="/root/.local/bin/:${PATH}"
 # Step 4: Establish our working path context inside the container image
 WORKDIR /app
 
+# NEW: Explicitly activate the uv virtual environment system-wide inside the image
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+
 # Step 5: Copy configuration dependencies first to leverage caching
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-cache
