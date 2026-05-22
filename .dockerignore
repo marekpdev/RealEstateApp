@@ -1,0 +1,48 @@
+.venv
+.env
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Git Metadata
+.git/
+.gitignore
+.gitattributes
+
+# IDE Configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Clutter
+.DS_Store
+Thumbs.db
+
+# Project local tool folders
+.junie/
+.files/
+tools/
+
+# Testing Harness Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker build metadata
+Dockerfile
+.dockerignore
+
+# Chainlit dynamic data states
+.chainlit/*
