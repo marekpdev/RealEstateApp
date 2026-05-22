@@ -1,10 +1,6 @@
 from langchain_core.messages import HumanMessage
 import chainlit as cl
-
 from graph import compiledStateGraph
-
-# Import your compiled graph instance from your workflow file
-# from your_graph_module import compiledStateGraph
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -23,12 +19,8 @@ async def on_message(message: cl.Message):
     inputs = {"messages": [HumanMessage(content=message.content)]}
     config = {"recursion_limit": 20}
 
-    # Track currently active UI steps so we can close or append to them dynamically
-    active_steps = {}
-
-    # 2. Run your exact state update streaming loop asynchronously
-    # NOTE: We use .astream() because Chainlit runs completely on async loops
-    async for output in compiledStateGraph.astream(inputs, config=config):
+    # 2. Run your state update streaming loop asynchronously
+    async for output in compiledStateGraph.astream(inputs, config=config, stream_mode="updates"):
 
         for node_name, state_update in output.items():
             # Clean up the name format for visual polish in the UI drawer
@@ -38,6 +30,9 @@ async def on_message(message: cl.Message):
             node_step = cl.Step(name=f"⚙️ Node: {clean_node_title}")
             await node_step.send()
 
+            # Initialize a safe base string variable for logs to prevent addition errors
+            log_output = ""
+
             # 3. Handle messages inside the node update payload
             if "messages" in state_update and state_update["messages"]:
                 last_msg = state_update["messages"][-1]
@@ -45,7 +40,7 @@ async def on_message(message: cl.Message):
                 # If the node generated a text breakdown (like financial reports or logs)
                 if hasattr(last_msg, "content") and last_msg.content:
                     # Write the response directly inside the expanded node drawer logs
-                    node_step.output = f"**Response:**\n{last_msg.content}"
+                    log_output = f"**Response:**\n{last_msg.content}"
 
                     # Special Rule: If this is the absolute final output node,
                     # write it directly to the main main viewport conversation path too!
@@ -55,7 +50,8 @@ async def on_message(message: cl.Message):
                 # If the node triggered structured tools (like SQL or Vector DB search queries)
                 if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                     tools_used = [t['name'] for t in last_msg.tool_calls]
-                    node_step.output += f"\n\n🛠️ **Triggered Tools:** `{', '.join(tools_used)}`"
+                    log_output += f"\n\n🛠️ **Triggered Tools:** `{', '.join(tools_used)}`"
 
-            # Update the UI state of the drawer to complete it cleanly
+            # Assign the complete string safely to the step output and push updates to UI
+            node_step.output = log_output
             await node_step.update()
