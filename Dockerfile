@@ -33,4 +33,4 @@ EXPOSE 8080
 # Step 8: Fire up the non-blocking production server runtime
 # We read the environmental $PORT variable dynamically so Azure can control it.
 # -h = Headless mode (prevents trying to auto-launch an interface window inside Linux)
-CMD ["sh", "-c", "uv run chainlit run app.py -h --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "chainlit run app.py --headless --host 0.0.0.0 --port $PORT"]
