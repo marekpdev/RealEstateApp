@@ -53,8 +53,8 @@ def _get_ingest_mock_response() -> dict:
     """
     # Instantiate the structured output object explicitly
     mock_payload = IngestInputAgentOutput(
-        city="Miami, FL",
-        budget="$600,000"
+        city="Los Angeles, CA",
+        budget="$800,000"
     )
 
     # Return the validated Pydantic object directly under 'ingest_input'

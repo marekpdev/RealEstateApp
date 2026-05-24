@@ -4,7 +4,7 @@ from graph import compiledStateGraph
 
 if __name__ == "__main__":
     # query = input("Ask the Agent: ")
-    query = "I would like to invest in Miami, FL, and my max budget is $200,000"
+    query = "I would like to invest in Los Angeles, CA, and my max budget is $800,000"
 
     # LangGraph handles the loop automatically
     inputs = {"messages": [HumanMessage(content=query)]}
