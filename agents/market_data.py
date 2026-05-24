@@ -1,18 +1,14 @@
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage
 
 from config import NodeName
 from config.llm import base_model
 from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
+from pathlib import Path
 
 # Local control toggle for this specific node
-
 use_mock_llm_response = True
-
-# TODO needs to be changed?
-# Instantiate your service layer using its default fallback pool (safe for local console execution)
-internal_gateway_service = RapidRealEstateMarketClient()
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
@@ -21,8 +17,8 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     inventory velocity and pricing variance risk factors.
     """
     # Guard Clause Check
-    # if use_mock_llm_response:
-    #     return _get_market_data_mock_llm_response(state)
+    if use_mock_llm_response:
+        return _get_market_data_mock_llm_response()
 
     print(f"market_data_agent_node1")
 
@@ -64,6 +60,12 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         evaluations=ai_evaluations  # Pure LLM evaluation model
     )
 
+    # DEBUG ONLY
+    # raw_json_string = output_payload.model_dump_json()
+    # pretty_json = json.dumps(json.loads(raw_json_string), indent=4)
+    # print("\n================ 🟢 NESTED JSON SCHEMATIC ================")
+    # print(pretty_json)
+
     return {
         "market_data": output_payload,
         "messages": [
@@ -74,35 +76,33 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
+def _get_market_data_mock_llm_response() -> dict:
+    """
+    Loads a comprehensive mock static dataset from a JSON fixture file,
+    instantiated securely through MarketDataAgentOutput for graph state compliance.
+    """
+    fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_market_data_output_payload.json"
 
-# --- PRIVATELY SCORED MOCK PROVIDER ---
-# def _get_market_data_mock_llm_response(state: OverallGraphState) -> dict:
-#     """
-#     Returns a static state-update payload mimicking a successful database query tool execution,
-#     instantiated securely through MarketDataAgentOutput for type-safety.
-#     """
-#     # Safely unfold parameters from the ingest layer for formatting the mock text
-#     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-#     max_budget = state.ingest_input.budget if state.ingest_input else "Unknown Budget"
-#
-#     mock_sql_result = (
-#         f"SQL Query Result for {target_city} (Max: {max_budget}):\n"
-#         "- 123 Brickell Ave: $580,000 | 2 Bed | 2 Bath | Cap Rate: 6.2%\n"
-#         "- 789 Wynwood Way: $520,000 | 1 Bed | 1.5 Bath | Cap Rate: 5.8%\n"
-#         "Market Trend: Median price per sq ft has expanded 4.5% year-over-year."
-#     )
-#
-#     # Instantiate the typed output object explicitly to match the Graph state expectations
-#     mock_payload = MarketDataAgentOutput(
-#         market_data=mock_sql_result
-#     )
-#
-#     return {
-#         "market_data": mock_payload,
-#         "messages": [
-#             AIMessage(
-#                 content="[MOCK] Market Data Agent: Successfully scanned relational tables. Loaded matching listings into state.",
-#                 name=NodeName.MARKET_DATA_AGENT.value
-#             )
-#         ]
-#     }
+    if not fixture_path.exists():
+        raise FileNotFoundError(
+            f"Mock configuration failure: The target JSON file was not found at {fixture_path}"
+        )
+
+    try:
+        raw_json_content = fixture_path.read_text(encoding="utf-8")
+        mock_payload = MarketDataAgentOutput.model_validate_json(raw_json_content)
+
+    except Exception as e:
+        raise ValueError(
+            f"Data Integrity Fault: Failed to validate mock JSON structure into MarketDataAgentOutput. Error: {e}"
+        )
+
+    return {
+        "market_data": mock_payload,
+        "messages": [
+            AIMessage(
+                content="[MOCK] Market Data Agent: Using mock market data",
+                name=NodeName.MARKET_DATA_AGENT.value
+            )
+        ]
+    }

@@ -19,8 +19,8 @@ def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     # --- Live AI Reasoning Path ---
     # Step 1: Safely unfold variables from the nested Pydantic state modules
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-
-    market_data_ctx = state.market_data.market_data if state.market_data else "No market listing data available."
+    # TODO need to fix it when working on financial modeler
+    # market_data_ctx = state.market_data.market_data if state.market_data else "No market listing data available."
     vibe_ctx = state.neighborhood_vibe.neighborhood_vibe if state.neighborhood_vibe else "No neighborhood sentiment context available."
     zoning_ctx = state.zoning_laws.zoning_laws if state.zoning_laws else "No municipal zoning data available."
 
@@ -41,7 +41,6 @@ def financial_modeler_agent_node(state: OverallGraphState) -> dict:
         HumanMessage(
             content=(
                 f"Generate a comprehensive prospectus report for {target_city}.\n\n"
-                f"1. MARKET DATA LISTINGS:\n{market_data_ctx}\n\n"
                 f"2. COMMUNITY SENTIMENT:\n{vibe_ctx}\n\n"
                 f"3. REGULATORY & ZONING LAWS:\n{zoning_ctx}\n"
             )
@@ -67,7 +66,8 @@ def _get_financial_modeler_mock_response(state: OverallGraphState) -> dict:
     """
     # Safely unfold parameters for formatting the mock response string
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-    market_data_txt = state.market_data.market_data if state.market_data else "No mock market data."
+    # TODO need to fix it when working on financial modeler
+    # market_data_txt = state.market_data.market_data if state.market_data else "No mock market data."
     vibe_txt = state.neighborhood_vibe.neighborhood_vibe if state.neighborhood_vibe else "No mock vibe data."
     zoning_txt = state.zoning_laws.zoning_laws if state.zoning_laws else "No mock zoning data."
 
@@ -75,7 +75,6 @@ def _get_financial_modeler_mock_response(state: OverallGraphState) -> dict:
         "### REAL ESTATE INVESTMENT PROSPECTUS REPORT ###\n\n"
         f"Analysis for Market: {target_city}\n"
         "--------------------------------------------------\n"
-        f"1. MARKET DATA LISTINGS:\n{market_data_txt}\n\n"
         f"2. COMMUNITY SENTIMENT:\n{vibe_txt}\n\n"
         f"3. REGULATORY & ZONING LAWS:\n{zoning_txt}\n\n"
         "4. FINAL INVESTMENT VERDICT:\n"

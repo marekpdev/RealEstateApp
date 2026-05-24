@@ -18,7 +18,7 @@ class RapidRealEstateMarketClient(BaseAPIClient):
         super().__init__(client=client, base_url="https://real-time-real-estate-data.p.rapidapi.com")
         self.api_key = os.getenv("RAPIDAPI_KEY")
         self.host_header = "real-time-real-estate-data.p.rapidapi.com"
-        self.fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "rapidapi_listings.json"
+        self.fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_rapidapi_listings.json"
 
     async def fetch_market_metrics(self, location_query: str) -> RealEstateGatewayModel:
         if not self.api_key and not MOCK_EXTERNAL_APIS:
