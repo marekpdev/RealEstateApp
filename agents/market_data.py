@@ -9,7 +9,7 @@ from pathlib import Path
 from utils import print_model
 
 # Local control toggle for this specific node
-use_mock_llm_response = False
+use_mock_llm_response = True
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """

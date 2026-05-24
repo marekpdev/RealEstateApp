@@ -29,5 +29,9 @@ raw_app = FastAPI(title="Real Estate Agentic System API", lifespan=lifespan)
 async def health_check():
     return {"status": "healthy"}
 
-app = cl.make_async(raw_app)
-mount_chainlit(app=app, target="app.py", slot_path="")
+try:
+    mount_chainlit(app=raw_app, target="app.py", path="")
+except Exception as e:
+    print(f"⚠️ Chainlit mounting context deferred: {e}")
+
+app = raw_app

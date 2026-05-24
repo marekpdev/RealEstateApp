@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import HTTPException
 import httpx
 # MOCK_EXTERNAL_APIS = os.getenv("MOCK_EXTERNAL_APIS", "False").lower() == "true"
-MOCK_EXTERNAL_APIS = False
+MOCK_EXTERNAL_APIS = True
 
 class BaseAPIClient:
     """
