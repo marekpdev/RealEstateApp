@@ -6,9 +6,10 @@ from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
 from pathlib import Path
+from utils import print_model
 
 # Local control toggle for this specific node
-use_mock_llm_response = True
+use_mock_llm_response = False
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
@@ -30,7 +31,7 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
 
     api_metrics: RealEstateGatewayModel = await gateway.fetch_market_metrics(target_city)
 
-    print(f"market_data_agent_node3 {api_metrics}")
+    print_model(api_metrics, "market_data_agent_node3")
 
     structured_llm = base_model.with_structured_output(LLMMarketEvaluations)
 
@@ -53,18 +54,12 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     # Step 3: Query listings via the structured model pipeline
     ai_evaluations: LLMMarketEvaluations = await structured_llm.ainvoke([SystemMessage(content=prompt)])
 
-    print(f"market_data_agent_node4 {ai_evaluations}")
-
     output_payload = MarketDataAgentOutput(
         telemetry=api_metrics,  # Pure API data model
         evaluations=ai_evaluations  # Pure LLM evaluation model
     )
 
-    # DEBUG ONLY
-    # raw_json_string = output_payload.model_dump_json()
-    # pretty_json = json.dumps(json.loads(raw_json_string), indent=4)
-    # print("\n================ 🟢 NESTED JSON SCHEMATIC ================")
-    # print(pretty_json)
+    print_model(output_payload, "market_data_agent_node4")
 
     return {
         "market_data": output_payload,
