@@ -4,6 +4,10 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException
 import httpx
 
+from config import config
+from utils.logger import log_agent_content
+
+
 class BaseAPIClient:
     """
     Vendor-agnostic HTTP Client handling shared connection pools,
@@ -27,13 +31,18 @@ class BaseAPIClient:
         # 1. Local Simulation/Testing Hook
         if mock_external_api:
             if fixture_path and fixture_path.exists():
-                print(f"--- [MOCK ACTIVE] Intercepting network call, loading: {fixture_path.name} ---")
+                if config.DEBUG_MODE:
+                    await log_agent_content("BaseAPIClient", f"--- [MOCK ACTIVE] Intercepting network call, loading: {fixture_path.name} ---")
                 return json.loads(fixture_path.read_text())
             raise HTTPException(status_code=500, detail=f"Simulation error: Missing snapshot file at {fixture_path}")
 
         # 2. Production Network Routing
         try:
             url = f"{self.base_url}{endpoint}"
+
+            if config.DEBUG_MODE:
+                await log_agent_content("BaseAPIClient",f"--- Calling url {url}")
+
             response = await self.client.request(
                 method=method,
                 url=url,
@@ -47,7 +56,8 @@ class BaseAPIClient:
             elif response.status_code != 200:
                 raise HTTPException(status_code=response.status_code,
                                     detail=f"Vendor failure downstream: {response.text}")
-
+            if config.DEBUG_MODE:
+                await log_agent_content("BaseAPIClient",f"--- Response received from {url} with status {response.status_code}")
             return response.json()
         except httpx.RequestError as exc:
             raise HTTPException(status_code=503, detail=f"Gateway routing communication outage: {exc}")
