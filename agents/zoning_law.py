@@ -1,9 +1,10 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
-from config import NodeName
+from config import NodeName, config
 from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
+from services.mcp_gateway import BraveSearchMCPClient
 from utils.logger import log_agent_header, log_agent_content
 
 
@@ -21,35 +22,72 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     # Step 1: Extract variables populated down one level inside the nested Ingest module
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
-    # Step 2: Bind your matching flat zoning law schema to force structured JSON wrapping
-    structured_llm = base_model.with_structured_output(ZoningLawAgentOutput)
+    mcp_client = BraveSearchMCPClient.get_client()
+    search_query = f"{target_city} multi family residential zoning laws accessory dwelling units 2026"
 
-    # Step 3: Query municipal rules via the structured model pipeline
-    extraction_result: ZoningLawAgentOutput = structured_llm.invoke([
-        SystemMessage(
-            content=(
-                "You are an expert real estate attorney and municipal zoning specialist. "
-                "Your job is to look up and parse local city ordinances, building codes, "
-                "density caps, height restrictions, and short-term rental (STR) legal frameworks "
-                "for a specified city. Provide an objective legal compliance breakdown as a clean, "
-                "structured string output."
-            )
-        ),
-        HumanMessage(
-            content=f"Analyze municipal codes, land-use zoning restrictions, and short-term rental rules for '{target_city}'."
-        )
-    ])
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, f"🔍 Querying Brave Search MCP for live data...")
 
-    # Step 4: Return the validated Pydantic object directly under the state key
+    print(f"zoning law 1 {search_query}")
+
+    search_results = await mcp_client.call_tool(
+        tool_name="brave_web_search",
+        arguments={"query": search_query},
+        # fixture_path=fixture_snapshot,
+        mock_external_api=config.MOCK_ZONING_LAW_AGENT_OUTPUT
+    )
+
+    print(f"zoning law 2 {search_results}")
+
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, "🤖 Synthesizing zoning analysis report via LLM...")
+
+    prompt = f"""
+        You are an expert real estate legal analyst. Analyze the following live web research data 
+        and summarize the zoning rules or restrictions for residential real estate investments in {target_city}.
+
+        Raw MCP Research Data:
+        {search_results}
+        """
+
+    response = await base_model.ainvoke([SystemMessage(content=prompt)])
+
+    print(f"zoning law 3 {response}")
+
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, "✨ Zoning analysis complete.")
+
     return {
-        "zoning_laws": extraction_result,
-        "messages": [
-            AIMessage(
-                content="Zoning Law Agent: Completed live municipal registry scanning and structured regulatory parsing.",
-                name=NodeName.ZONING_LAW_AGENT.value
-            )
-        ]
+        "zoning_laws": "test",
     }
+
+
+    # # Step 2: Bind your matching flat zoning law schema to force structured JSON wrapping
+    # structured_llm = base_model.with_structured_output(ZoningLawAgentOutput)
+    #
+    # # Step 3: Query municipal rules via the structured model pipeline
+    # extraction_result: ZoningLawAgentOutput = structured_llm.invoke([
+    #     SystemMessage(
+    #         content=(
+    #             "You are an expert real estate attorney and municipal zoning specialist. "
+    #             "Your job is to look up and parse local city ordinances, building codes, "
+    #             "density caps, height restrictions, and short-term rental (STR) legal frameworks "
+    #             "for a specified city. Provide an objective legal compliance breakdown as a clean, "
+    #             "structured string output."
+    #         )
+    #     ),
+    #     HumanMessage(
+    #         content=f"Analyze municipal codes, land-use zoning restrictions, and short-term rental rules for '{target_city}'."
+    #     )
+    # ])
+    #
+    # # Step 4: Return the validated Pydantic object directly under the state key
+    # return {
+    #     "zoning_laws": extraction_result,
+    #     "messages": [
+    #         AIMessage(
+    #             content="Zoning Law Agent: Completed live municipal registry scanning and structured regulatory parsing.",
+    #             name=NodeName.ZONING_LAW_AGENT.value
+    #         )
+    #     ]
+    # }
 
 
 # --- PRIVATELY SCORED MOCK PROVIDER ---

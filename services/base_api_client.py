@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from fastapi import HTTPException
 import httpx
-
 from config import config
 from utils.logger import log_agent_content
 

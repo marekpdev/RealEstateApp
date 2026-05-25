@@ -6,7 +6,7 @@ from fastapi import HTTPException
 import chainlit as cl
 from config.config import MOCK_MARKET_DATA_API, RAPIDAPI_KEY
 from schema.market_data import RealEstateGatewayModel, PropertyRecord
-from services.base_client import BaseAPIClient
+from services.base_api_client import BaseAPIClient
 
 class RapidRealEstateMarketClient(BaseAPIClient):
     """
