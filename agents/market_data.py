@@ -1,46 +1,62 @@
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage
 
 from config import NodeName
+from config.config import MOCK_MARKET_DATA_AGENT_OUTPUT
 from config.llm import base_model
+from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
+from services.market_data_gateway import RapidRealEstateMarketClient
+from pathlib import Path
+from utils import print_model
 
-# Local control toggle for this specific node
-use_mock = True
-
-def market_data_agent_node(state: OverallGraphState) -> dict:
+async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
-    Market Data Agent: Coordinates database searches and real estate listings lookup.
-    Granularly routes between mock records and a live retrieval/LLM tool pipeline.
+    Fetches raw market dataset telemetry from the RapidAPI gateway client
+    and applies an inline structured LLM classification overlay to determine
+    inventory velocity and pricing variance risk factors.
     """
     # Guard Clause Check
-    if use_mock:
-        return _get_market_data_mock_response(state)
+    if MOCK_MARKET_DATA_AGENT_OUTPUT:
+        return _get_market_data_mock_llm_response()
 
-    # --- Live AI Reasoning Path ---
-    # Step 1: Extract variables populated down one level inside the nested Ingest module
-    target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-    max_budget = state.ingest_input.budget if state.ingest_input else "Unknown Budget"
+    target_city = state.ingest_input.city if state.ingest_input else "Unknown City"
 
-    # Step 2: Bind your matching flat market data schema to force structured JSON wrapping
-    structured_llm = base_model.with_structured_output(MarketDataAgentOutput)
+    gateway = RapidRealEstateMarketClient.get_client()
+
+    api_metrics: RealEstateGatewayModel = await gateway.fetch_market_metrics(target_city)
+
+    print_model(api_metrics)
+
+    structured_llm = base_model.with_structured_output(LLMMarketEvaluations)
+
+    prompt = (
+        "You are an automated real estate underwriting system. Analyze the raw market data "
+        "provided below and accurately classify the inventory_velocity_tier and pricing_dispersion_risk.\n\n"
+        f"Target Location: {api_metrics.requested_location}\n"
+        f"Total Active Listings: {api_metrics.total_listings}\n"
+        f"Calculated Average: ${api_metrics.average_price:,.2f}\n"
+        f"Calculated Median: ${api_metrics.median_price:,.2f}\n"
+        f"Absolute Range Spread: ${api_metrics.lowest_listing:,.2f} to ${api_metrics.highest_listing:,.2f}\n\n"
+        "CLASSIFICATION RULES:\n"
+        "- inventory_velocity_tier: Count total active listings. If under 5, classify as 'RUSH'. "
+        "If between 5 and 50, classify as 'BALANCED'. If greater than 50, classify as 'STAGNANT'.\n"
+        "- pricing_dispersion_risk: Calculate spread ratio (highest_listing divided by lowest_listing). "
+        "If highest listing is more than 3x the lowest, classify as 'HIGH_VOLATILITY'. "
+        "If less than 1.5x, classify as 'STABLE'. Otherwise, classify as 'MODERATE'."
+    )
 
     # Step 3: Query listings via the structured model pipeline
-    extraction_result: MarketDataAgentOutput = structured_llm.invoke([
-        SystemMessage(
-            content=(
-                "You are an expert real estate data analyst specializing in local market MLS data. "
-                "Your job is to look up active properties, pricing tiers, and average cap rates "
-                "matching the user's location and budget bounds. Provide a clean, structured string output."
-            )
-        ),
-        HumanMessage(
-            content=f"Find active real estate investment properties in '{target_city}' under a maximum budget of '{max_budget}'."
-        )
-    ])
+    ai_evaluations: LLMMarketEvaluations = await structured_llm.ainvoke([SystemMessage(content=prompt)])
 
-    # Step 4: Return the validated Pydantic object directly under the state key
+    output_payload = MarketDataAgentOutput(
+        telemetry=api_metrics,  # Pure API data model
+        evaluations=ai_evaluations  # Pure LLM evaluation model
+    )
+
+    print_model(output_payload)
+
     return {
-        "market_data": extraction_result,
+        "market_data": output_payload,
         "messages": [
             AIMessage(
                 content="Market Data Agent: Successfully scanned data feeds via live structured LLM lookup.",
@@ -49,34 +65,32 @@ def market_data_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-
-# --- PRIVATELY SCORED MOCK PROVIDER ---
-def _get_market_data_mock_response(state: OverallGraphState) -> dict:
+def _get_market_data_mock_llm_response() -> dict:
     """
-    Returns a static state-update payload mimicking a successful database query tool execution,
-    instantiated securely through MarketDataAgentOutput for type-safety.
+    Loads a comprehensive mock static dataset from a JSON fixture file,
+    instantiated securely through MarketDataAgentOutput for graph state compliance.
     """
-    # Safely unfold parameters from the ingest layer for formatting the mock text
-    target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-    max_budget = state.ingest_input.budget if state.ingest_input else "Unknown Budget"
+    fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_market_data_output_payload.json"
 
-    mock_sql_result = (
-        f"SQL Query Result for {target_city} (Max: {max_budget}):\n"
-        "- 123 Brickell Ave: $580,000 | 2 Bed | 2 Bath | Cap Rate: 6.2%\n"
-        "- 789 Wynwood Way: $520,000 | 1 Bed | 1.5 Bath | Cap Rate: 5.8%\n"
-        "Market Trend: Median price per sq ft has expanded 4.5% year-over-year."
-    )
+    if not fixture_path.exists():
+        raise FileNotFoundError(
+            f"Mock configuration failure: The target JSON file was not found at {fixture_path}"
+        )
 
-    # Instantiate the typed output object explicitly to match the Graph state expectations
-    mock_payload = MarketDataAgentOutput(
-        market_data=mock_sql_result
-    )
+    try:
+        raw_json_content = fixture_path.read_text(encoding="utf-8")
+        mock_payload = MarketDataAgentOutput.model_validate_json(raw_json_content)
+
+    except Exception as e:
+        raise ValueError(
+            f"Data Integrity Fault: Failed to validate mock JSON structure into MarketDataAgentOutput. Error: {e}"
+        )
 
     return {
         "market_data": mock_payload,
         "messages": [
             AIMessage(
-                content="[MOCK] Market Data Agent: Successfully scanned relational tables. Loaded matching listings into state.",
+                content="[MOCK] Market Data Agent: Using mock market data",
                 name=NodeName.MARKET_DATA_AGENT.value
             )
         ]

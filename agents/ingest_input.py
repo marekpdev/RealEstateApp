@@ -1,15 +1,13 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from config import NodeName
+from config.config import MOCK_INGEST_INPUT_AGENT_OUTPUT
 from config.llm import base_model
 from pydantic import BaseModel, Field
 from schema.state import OverallGraphState, IngestInputAgentOutput
 
-# Local control toggle for this specific node
-use_mock = True
-
 def ingest_input_agent_node(state: OverallGraphState) -> dict:
-    if use_mock:
+    if MOCK_INGEST_INPUT_AGENT_OUTPUT:
         return _get_ingest_mock_response()
 
     # Step 1: Retrieve the raw human prompt from the input
@@ -53,8 +51,8 @@ def _get_ingest_mock_response() -> dict:
     """
     # Instantiate the structured output object explicitly
     mock_payload = IngestInputAgentOutput(
-        city="Miami, FL",
-        budget="$600,000"
+        city="Los Angeles, CA",
+        budget="$800,000"
     )
 
     # Return the validated Pydantic object directly under 'ingest_input'

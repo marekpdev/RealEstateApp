@@ -17,5 +17,5 @@ When you request a market deal calculation, the system initializes a state graph
 Type an investment scenario into the chat bar below to watch the underlying LangGraph nodes activate in real time.
 
 **Example Prompts to Paste:**
-* *"I would like to invest in Miami, FL, and my max budget is $600,000. Calculate deal metrics."*
-* *"Crunch investment metrics for a property in Wynwood under $500,000."*
+* *"I would like to invest in Los Angeles, CA, and my max budget is $800,000. Calculate deal metrics."*
+* *"Crunch investment metrics for a property in Hollywood Hills under $800,000."*

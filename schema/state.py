@@ -3,19 +3,11 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 
+from schema.market_data import MarketDataAgentOutput
+
 class IngestInputAgentOutput(BaseModel):
     city: str = Field(..., description="The city extracted from the user's input")
     budget: str = Field(..., description="The maximum budget extracted from the user's input")
-
-class MarketDataAgentOutput(BaseModel):
-    """
-    Flat structured output for the Market Data Agent.
-    Forces the LLM to package database results into a single string.
-    """
-    market_data: str = Field(
-        ...,
-        description="Raw real estate pricing, specific property listings, and matching metrics from SQL search."
-    )
 
 class NeighborhoodVibeAgentOutput(BaseModel):
     """
@@ -56,7 +48,7 @@ class OverallGraphState(BaseModel):
     )
     market_data: Optional[MarketDataAgentOutput] = Field(
         None,
-        description="Nested model holding extracted pricing metrics and active listings."
+        description="Nested model holding extracted property metrics and active listings."
     )
     neighborhood_vibe: Optional[NeighborhoodVibeAgentOutput] = Field(
         None,
