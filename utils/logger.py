@@ -35,26 +35,24 @@ async def log_agent_header(key: str, text: str):
         sys.stdout.write(f"\n⚙️  [{text}]\n")
         sys.stdout.flush()
 
-async def log_agent_content(key: str, text: str):
+async def log_agent_content(parent_key: str, text: str):
     if _is_chainlit_active():
         active_steps = cl.user_session.get("active_agent_steps") or {}
 
         # Defensive check: if header wasn't initialized first, spawn it safely
-        if key not in active_steps:
-            fallback_title = f"Node: {key.replace('_', ' ').title()}"
-            await log_agent_header(key, fallback_title)
-            active_steps = cl.user_session.get("active_agent_steps")
+        if parent_key not in active_steps:
+            fallback_title = f"Node: {parent_key.replace('_', ' ').title()}"
+            await log_agent_header(parent_key, fallback_title)
+            active_steps = cl.user_session.get("active_agent_steps") or {}
 
-        # Update the target UI step element dynamically
-        ui_step = active_steps[key]
-        ui_step.output = text
-        await ui_step.update()
+        parent_step = active_steps[parent_key]
+        child_step = cl.Step(name=text, parent_id=parent_step.id)
+        await child_step.send()
     else:
         # 💻 CLI Fallback: Grab the corresponding header name to structure terminal logs
-        header_title = _cli_headers.get(key, key.upper())
+        header_title = _cli_headers.get(parent_key, parent_key.upper())
         sys.stdout.write(f"  └── [{header_title}]: {text}\n")
         sys.stdout.flush()
-
 
 async def log_message(text: str):
     if _is_chainlit_active():

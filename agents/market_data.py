@@ -1,6 +1,8 @@
+import asyncio
+
 from langchain_core.messages import SystemMessage, AIMessage
 
-from config import NodeName
+from config import NodeName, config
 from config.config import MOCK_MARKET_DATA_AGENT_OUTPUT
 from config.llm import base_model
 from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
@@ -28,6 +30,9 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     gateway = RapidRealEstateMarketClient.get_client()
 
     api_metrics: RealEstateGatewayModel = await gateway.fetch_market_metrics(target_city)
+
+    if(config.DEBUG_MODE):
+        await log_agent_content(NodeName.MARKET_DATA_AGENT, f"🔄Total listings {api_metrics.total_listings}")
 
     print_model(api_metrics)
 
@@ -58,6 +63,8 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     )
 
     print_model(output_payload)
+
+    await log_agent_content(NodeName.MARKET_DATA_AGENT, f"🔄 output_payload evaluations {output_payload.evaluations.pricing_dispersion_risk}")
 
     return {
         "market_data": output_payload,
