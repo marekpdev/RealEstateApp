@@ -1,6 +1,8 @@
 from langchain_core.messages import HumanMessage
 import chainlit as cl
+from config import config
 from graph import compiledStateGraph
+from utils.logger import log_message
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -8,6 +10,19 @@ async def on_chat_start():
     await cl.Message(
         content="👋 **Real Estate Investment Planner Online**. Type your investment parameters to see the multi-agent graph route in real time!"
     ).send()
+    if config.DEBUG_MODE:
+        debug_message = f"""
+        ** DEBUG MODE ENABLED **
+        - ENV VARS -
+        MOCK_FINANCIAL_MODELER_AGENT_OUTPUT - {config.MOCK_FINANCIAL_MODELER_AGENT_OUTPUT}
+        MOCK_INGEST_INPUT_AGENT_OUTPUT - {config.MOCK_INGEST_INPUT_AGENT_OUTPUT}
+        MOCK_MARKET_DATA_AGENT_OUTPUT - {config.MOCK_MARKET_DATA_AGENT_OUTPUT}
+        MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT - {config.MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT}
+        MOCK_ZONING_LAW_AGENT_OUTPUT - {config.MOCK_ZONING_LAW_AGENT_OUTPUT}
+        MOCK_MARKET_DATA_API - {config.MOCK_MARKET_DATA_API}
+        """
+        await log_message(debug_message)
+
 
 @cl.on_message
 async def on_message(message: cl.Message):

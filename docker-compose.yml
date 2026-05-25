@@ -1,0 +1,22 @@
+services:
+  web_app:
+    build: .
+    image: realestateapp:local
+    container_name: realestateapp_container
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - DEBUG_MODE
+      - GITHUB_TOKEN
+      - RAPIDAPI_KEY
+      - MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
+      - MOCK_INGEST_INPUT_AGENT_OUTPUT
+      - MOCK_MARKET_DATA_AGENT_OUTPUT
+      - MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
+      - MOCK_ZONING_LAW_AGENT_OUTPUT
+      - MOCK_MARKET_DATA_API
