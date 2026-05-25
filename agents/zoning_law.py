@@ -1,19 +1,16 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from config import NodeName
+from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
-
-# Local control toggle for this specific node
-use_mock = True
 
 def zoning_law_agent_node(state: OverallGraphState) -> dict:
     """
     Zoning Law Agent: Coordinates municipal ordinance and regulatory compliance lookup.
     Granularly routes between mock records and a live compliance/LLM parsing pipeline.
     """
-    # Guard Clause Check
-    if use_mock:
+    if MOCK_ZONING_LAW_AGENT_OUTPUT:
         return _get_zoning_law_mock_response(state)
 
     # --- Live AI Reasoning Path ---

@@ -1,4 +1,5 @@
 import json
+import os
 from typing import TypeVar, Any
 from pydantic import BaseModel
 
@@ -32,3 +33,8 @@ def print_model(model_instance: T, title: str = "MODEL") -> None:
 
     except Exception as e:
         print(f"❌ [Error] Failed to print schematic framework for model instance. Exception: {e}")
+
+def get_env_bool(key: str, default: bool = False) -> bool:
+    """Safely extracts an environment variable and parses it directly into a Boolean."""
+    fallback_str = "false" if default else "true"
+    return os.getenv(key, fallback_str).lower() in ("true", "1", "yes")

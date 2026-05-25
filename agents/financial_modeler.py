@@ -1,19 +1,16 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from config import NodeName
+from config.config import MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, FinancialModelerAgentOutput
-
-# Local control toggle for this specific node
-use_mock = True
 
 def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     """
     Financial Modeler Node: Reads ALL typed worker modules, combines them via structured output,
     and granularly routes between mock outputs and a live LLM synthesis pipeline.
     """
-    # Guard Clause Check
-    if use_mock:
+    if MOCK_FINANCIAL_MODELER_AGENT_OUTPUT:
         return _get_financial_modeler_mock_response(state)
 
     # --- Live AI Reasoning Path ---

@@ -1,13 +1,12 @@
 # services/market_data_gateway.py
-import os
 import httpx
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 from fastapi import HTTPException
 import chainlit as cl
-
+from config.config import MOCK_MARKET_DATA_API, RAPIDAPI_KEY
 from schema.market_data import RealEstateGatewayModel, PropertyRecord
-from services.base_client import BaseAPIClient, MOCK_EXTERNAL_APIS
+from services.base_client import BaseAPIClient
 
 class RapidRealEstateMarketClient(BaseAPIClient):
     """
@@ -16,12 +15,12 @@ class RapidRealEstateMarketClient(BaseAPIClient):
     """
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         super().__init__(client=client, base_url="https://real-time-real-estate-data.p.rapidapi.com")
-        self.api_key = os.getenv("RAPIDAPI_KEY")
+        self.api_key = RAPIDAPI_KEY
         self.host_header = "real-time-real-estate-data.p.rapidapi.com"
         self.fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_rapidapi_listings.json"
 
     async def fetch_market_metrics(self, location_query: str) -> RealEstateGatewayModel:
-        if not self.api_key and not MOCK_EXTERNAL_APIS:
+        if not self.api_key and not MOCK_MARKET_DATA_API:
             raise HTTPException(status_code=500, detail="Configuration Fault: Missing production RAPIDAPI_KEY.")
 
         headers = {
@@ -41,7 +40,8 @@ class RapidRealEstateMarketClient(BaseAPIClient):
             endpoint="/search",
             headers=headers,
             params=params,
-            fixture_path=self.fixture_path
+            fixture_path=self.fixture_path,
+            mock_external_api= MOCK_MARKET_DATA_API
         )
 
         properties: List[PropertyRecord] = raw_payload.get("data", [])

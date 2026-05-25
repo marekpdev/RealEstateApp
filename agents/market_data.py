@@ -1,15 +1,13 @@
 from langchain_core.messages import SystemMessage, AIMessage
 
 from config import NodeName
+from config.config import MOCK_MARKET_DATA_AGENT_OUTPUT
 from config.llm import base_model
 from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
 from pathlib import Path
 from utils import print_model
-
-# Local control toggle for this specific node
-use_mock_llm_response = True
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
@@ -18,20 +16,16 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     inventory velocity and pricing variance risk factors.
     """
     # Guard Clause Check
-    if use_mock_llm_response:
+    if MOCK_MARKET_DATA_AGENT_OUTPUT:
         return _get_market_data_mock_llm_response()
 
-    print(f"market_data_agent_node1")
-
     target_city = state.ingest_input.city if state.ingest_input else "Unknown City"
-
-    print(f"market_data_agent_node2 {target_city}")
 
     gateway = RapidRealEstateMarketClient.get_client()
 
     api_metrics: RealEstateGatewayModel = await gateway.fetch_market_metrics(target_city)
 
-    print_model(api_metrics, "market_data_agent_node3")
+    print_model(api_metrics)
 
     structured_llm = base_model.with_structured_output(LLMMarketEvaluations)
 
@@ -59,7 +53,7 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         evaluations=ai_evaluations  # Pure LLM evaluation model
     )
 
-    print_model(output_payload, "market_data_agent_node4")
+    print_model(output_payload)
 
     return {
         "market_data": output_payload,

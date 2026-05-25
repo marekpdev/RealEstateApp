@@ -1,11 +1,8 @@
-import os
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from fastapi import HTTPException
 import httpx
-# MOCK_EXTERNAL_APIS = os.getenv("MOCK_EXTERNAL_APIS", "False").lower() == "true"
-MOCK_EXTERNAL_APIS = True
 
 class BaseAPIClient:
     """
@@ -23,11 +20,12 @@ class BaseAPIClient:
             endpoint: str,
             headers: Optional[Dict[str, str]] = None,
             params: Optional[Dict[str, Any]] = None,
-            fixture_path: Optional[Path] = None
+            fixture_path: Optional[Path] = None,
+            mock_external_api: bool = False,
     ) -> Dict[str, Any]:
 
         # 1. Local Simulation/Testing Hook
-        if MOCK_EXTERNAL_APIS:
+        if mock_external_api:
             if fixture_path and fixture_path.exists():
                 print(f"--- [MOCK ACTIVE] Intercepting network call, loading: {fixture_path.name} ---")
                 return json.loads(fixture_path.read_text())

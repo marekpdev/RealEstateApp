@@ -1,19 +1,16 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from config import NodeName
+from config.config import MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
-
-# Local control toggle for this specific node
-use_mock = True
 
 def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     """
     Neighborhood Vibe Agent: Coordinates semantic context lookup regarding social demographics.
     Granularly routes between mock records and a live Vector DB / RAG tool pipeline.
     """
-    # Guard Clause Check
-    if use_mock:
+    if MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT:
         return _get_neighborhood_vibe_mock_response(state)
 
     # --- Live AI Reasoning Path ---
