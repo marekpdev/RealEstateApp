@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from utils import get_env_bool
+from utils.utils import get_env_bool
 
 load_dotenv()
 

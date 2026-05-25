@@ -7,17 +7,23 @@ from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
 from pathlib import Path
-from utils import print_model
+
+from utils.logger import log_agent_header, log_agent_content, log_message
+from utils.utils import print_model
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
-    Fetches raw market dataset telemetry from the RapidAPI gateway client
+    Marked Data Agent: Fetches raw market dataset telemetry from the RapidAPI gateway client
     and applies an inline structured LLM classification overlay to determine
     inventory velocity and pricing variance risk factors.
     """
+    await log_agent_header(NodeName.MARKET_DATA_AGENT, "⚙️ Node: Market Data Agent")
+
+    await log_message("Test message")
+
     # Guard Clause Check
     if MOCK_MARKET_DATA_AGENT_OUTPUT:
-        return _get_market_data_mock_llm_response()
+        return await _get_market_data_mock_llm_response()
 
     target_city = state.ingest_input.city if state.ingest_input else "Unknown City"
 
@@ -65,11 +71,13 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-def _get_market_data_mock_llm_response() -> dict:
+async def _get_market_data_mock_llm_response() -> dict:
     """
     Loads a comprehensive mock static dataset from a JSON fixture file,
     instantiated securely through MarketDataAgentOutput for graph state compliance.
     """
+    await log_agent_content(NodeName.MARKET_DATA_AGENT, "🔄 [MOCK] Market Data Agent: Using mock data")
+
     fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_market_data_output_payload.json"
 
     if not fixture_path.exists():

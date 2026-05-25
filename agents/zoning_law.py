@@ -4,14 +4,18 @@ from config import NodeName
 from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
+from utils.logger import log_agent_header, log_agent_content
 
-def zoning_law_agent_node(state: OverallGraphState) -> dict:
+
+async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     """
     Zoning Law Agent: Coordinates municipal ordinance and regulatory compliance lookup.
     Granularly routes between mock records and a live compliance/LLM parsing pipeline.
     """
+    await log_agent_header(NodeName.ZONING_LAW_AGENT, "⚙️ Node: Zoning Law Agent")
+
     if MOCK_ZONING_LAW_AGENT_OUTPUT:
-        return _get_zoning_law_mock_response(state)
+        return await _get_zoning_law_mock_response(state)
 
     # --- Live AI Reasoning Path ---
     # Step 1: Extract variables populated down one level inside the nested Ingest module
@@ -49,11 +53,13 @@ def zoning_law_agent_node(state: OverallGraphState) -> dict:
 
 
 # --- PRIVATELY SCORED MOCK PROVIDER ---
-def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
+async def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
     """
     Returns a static state-update payload mimicking a successful compliance registry tool database check,
     instantiated securely through ZoningLawAgentOutput for type-safety.
     """
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, "🔄 [MOCK] Zoning Law Agent: Using mock data")
+
     # Safely unfold parameters from the ingest layer for formatting the mock text
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 

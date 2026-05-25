@@ -3,12 +3,20 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from config import NodeName
 from config.config import MOCK_INGEST_INPUT_AGENT_OUTPUT
 from config.llm import base_model
-from pydantic import BaseModel, Field
 from schema.state import OverallGraphState, IngestInputAgentOutput
+from utils.logger import log_agent_header, log_agent_content
 
-def ingest_input_agent_node(state: OverallGraphState) -> dict:
+
+async def ingest_input_agent_node(state: OverallGraphState) -> dict:
+    """
+    Ingest Input Agent: Extracts and validates user input for market analysis.
+    This agent processes the user's natural language input to extract the targeted location and maximum budget allocation.
+    It ensures that the extracted data is valid and structured according to the defined schema.
+    """
+    await log_agent_header(NodeName.INGEST_INPUT_AGENT, "⚙️ Node: Ingest Input Agent")
+
     if MOCK_INGEST_INPUT_AGENT_OUTPUT:
-        return _get_ingest_mock_response()
+        return await _get_ingest_mock_response()
 
     # Step 1: Retrieve the raw human prompt from the input
     user_message_content = state.messages[-1].content
@@ -44,11 +52,13 @@ def ingest_input_agent_node(state: OverallGraphState) -> dict:
 
 
 # --- PRIVATELY SCORED MOCK PROVIDER ---
-def _get_ingest_mock_response() -> dict:
+async def _get_ingest_mock_response() -> dict:
     """
     Returns a static state-update payload verified by IngestInputAgentOutput,
     nested under the correct key for OverallGraphState compatibility.
     """
+    await log_agent_content(NodeName.INGEST_INPUT_AGENT, "🔄 [MOCK] Ingest Input Agent: Using mock data")
+
     # Instantiate the structured output object explicitly
     mock_payload = IngestInputAgentOutput(
         city="Los Angeles, CA",
@@ -60,7 +70,7 @@ def _get_ingest_mock_response() -> dict:
         "ingest_input": mock_payload,
         "messages": [
             AIMessage(
-                content=f"[MOCK] Ingest Node: Parsed targeted market as '{mock_payload.city}' and set investment ceiling to '{mock_payload.budget}'.",
+                content=f"[MOCK] Ingest Input Agent: Parsed targeted market as '{mock_payload.city}' and set investment ceiling to '{mock_payload.budget}'.",
                 name=NodeName.INGEST_INPUT_AGENT.value
             )
         ]
