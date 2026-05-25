@@ -19,8 +19,6 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
     await log_agent_header(NodeName.MARKET_DATA_AGENT, "⚙️ Node: Market Data Agent")
 
-    await log_message("Test message")
-
     # Guard Clause Check
     if MOCK_MARKET_DATA_AGENT_OUTPUT:
         return await _get_market_data_mock_llm_response()
