@@ -4,14 +4,18 @@ from config import NodeName
 from config.config import MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
+from utils.logger import log_agent_header, log_agent_content
 
-def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
+
+async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     """
     Neighborhood Vibe Agent: Coordinates semantic context lookup regarding social demographics.
     Granularly routes between mock records and a live Vector DB / RAG tool pipeline.
     """
+    await log_agent_header(NodeName.NEIGHBORHOOD_VIBE_AGENT, "⚙️ Node: Neighborhood Vibe Agent")
+
     if MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT:
-        return _get_neighborhood_vibe_mock_response(state)
+        return await _get_neighborhood_vibe_mock_response(state)
 
     # --- Live AI Reasoning Path ---
     # Step 1: Extract variables populated down one level inside the nested Ingest module
@@ -48,11 +52,13 @@ def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
 
 
 # --- PRIVATELY SCORED MOCK PROVIDER ---
-def _get_neighborhood_vibe_mock_response(state: OverallGraphState) -> dict:
+async def _get_neighborhood_vibe_mock_response(state: OverallGraphState) -> dict:
     """
     Returns a static state-update payload mimicking a successful vector database semantic RAG lookup,
     instantiated securely through NeighborhoodVibeAgentOutput for type-safety.
     """
+    await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "🔄 [MOCK] Neighborhood Vibe Agent: Using mock data")
+
     # Safely unfold parameters from the ingest layer for formatting the mock text
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 

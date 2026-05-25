@@ -4,14 +4,18 @@ from config import NodeName
 from config.config import MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, FinancialModelerAgentOutput
+from utils.logger import log_agent_header, log_agent_content
 
-def financial_modeler_agent_node(state: OverallGraphState) -> dict:
+
+async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     """
     Financial Modeler Node: Reads ALL typed worker modules, combines them via structured output,
     and granularly routes between mock outputs and a live LLM synthesis pipeline.
     """
+    await log_agent_header(NodeName.FINANCIAL_MODELER_AGENT, "⚙️ Node: Financial Modeler Agent")
+
     if MOCK_FINANCIAL_MODELER_AGENT_OUTPUT:
-        return _get_financial_modeler_mock_response(state)
+        return await _get_financial_modeler_mock_response(state)
 
     # --- Live AI Reasoning Path ---
     # Step 1: Safely unfold variables from the nested Pydantic state modules
@@ -56,11 +60,13 @@ def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     }
 
 
-def _get_financial_modeler_mock_response(state: OverallGraphState) -> dict:
+async def _get_financial_modeler_mock_response(state: OverallGraphState) -> dict:
     """
     Returns a static state-update payload mimicking a successful multi-source synthesis analysis,
     instantiated securely through FinancialModelerAgentOutput for type-safety.
     """
+    await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, "🔄 [MOCK] Financial Modeler Agent: Using mock data")
+
     # Safely unfold parameters for formatting the mock response string
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
     # TODO need to fix it when working on financial modeler
