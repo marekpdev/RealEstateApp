@@ -11,23 +11,27 @@ class UnifiedMCPGateway:
 # TODO move it to enum
     @staticmethod
     async def get_tools(allowed_tool_names: Optional[List[str]] = None):
-        # Establish the infrastructure configuration once
-        async with MultiServerMCPClient({
+        # 1. Instantiate the client directly without 'async with'
+        client = MultiServerMCPClient({
             "brave_search": {
+                "transport": "stdio",
                 "command": "uvx",
                 "args": ["mcp-brave-search"],
                 "env": {"BRAVE_API_KEY": config.BRAVE_API_KEY}
             },
             "fetch_service": {
+                "transport": "stdio",
                 "command": "uvx",
                 "args": ["mcp-server-fetch"]
             }
-        }) as client:
-            all_discovered_tools = await client.get_tools()
+        })
 
-            # If no filter is passed, return everything safely
-            if not allowed_tool_names:
-                return all_discovered_tools
+        # 2. Directly await the tool discovery contract hook
+        all_discovered_tools = await client.get_tools()
 
-            # 🎯 Filter out only the tools matching our strict allowance list
-            return [tool for tool in all_discovered_tools if tool.name in allowed_tool_names]
+        # If no filter is passed, return everything safely
+        if not allowed_tool_names:
+            return all_discovered_tools
+
+        # 🎯 Filter out only the tools matching our strict allowance list
+        return [tool for tool in all_discovered_tools if tool.name in allowed_tool_names]
