@@ -6,6 +6,7 @@ dependencies = [
     "chainlit>=2.11.1",
     "httpx>=0.28.0",
     "langchain-core>=1.4.0",
+    "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=1.2.1",
     "langgraph>=1.2.0",
     "mcp>=1.27.1",
