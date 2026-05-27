@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "chainlit>=2.11.1",
     "httpx>=0.28.0",
+    "langchain>=1.3.2",
     "langchain-core>=1.4.0",
     "langchain-mcp-adapters>=0.2.2",
     "langchain-openai>=1.2.1",

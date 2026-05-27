@@ -1,4 +1,5 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain.agents import create_agent
 
 from config import NodeName, config
 from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
@@ -6,25 +7,58 @@ from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
 from tools.tools import UnifiedMCPGateway
 from utils.logger import log_agent_header, log_agent_content
+_COMPILED_ZONING_AGENT = None
+
+async def _get_compiled_zoning_agent():
+    """
+    Lazy-loads and caches the modern unified agent instance to prevent
+    re-fetching MCP tools from the server on every graph node activation.
+    """
+    global _COMPILED_ZONING_AGENT
+    if _COMPILED_ZONING_AGENT is not None:
+        return _COMPILED_ZONING_AGENT
+
+    # Dynamically fetch compliant tool structures from the live MCP gateway
+    tools_list = await UnifiedMCPGateway.get_tools(
+        allowed_tool_names=["brave_search", "fetch_service"],
+    )
+
+    # Instantiate the modern unified agent framework
+    _COMPILED_ZONING_AGENT = create_agent(
+        model=base_model,
+        tools=tools_list,
+        # 🎯 The agent natively handles the validation loop on exit and saves
+        # the verified Pydantic model directly into the 'structured_response' key.
+        response_format=ZoningLawAgentOutput
+    )
+    return _COMPILED_ZONING_AGENT
+
+
+# =====================================================================
+# 2. RUNTIME GRAPH NODE LAYER
+# =====================================================================
 
 async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     """
-        Zoning Law Agent: Executes an iterative ReAct research cycle over MCP tools.
-        Once tools are exhausted, it builds a finalized Pydantic structured output.
+    Zoning Law Agent: Prepares contextual search objectives and routes them
+    through a unified agent harness to execute tool runs and extract a structured payload.
     """
     await log_agent_header(NodeName.ZONING_LAW_AGENT, "⚙️ Node: Zoning Law Agent")
 
+    # Handle Mock Execution
     if MOCK_ZONING_LAW_AGENT_OUTPUT:
         return await _get_zoning_law_mock_response(state)
 
+    # 1. Fetch the globally cached agent harness
+    agent = await _get_compiled_zoning_agent()
+
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
-    # 1. STATE PERSISTENCE: Check if we are starting fresh or reading a tool loop return
-    # TODO need to fix it
-    messages = list(state.messages)
-    if not messages:
-        await log_agent_content(NodeName.ZONING_LAW_AGENT, "🌱 Context empty. Initializing zoning search objectives...")
-        messages = [
+    # 2. Construct a clean starting input state for this agent run.
+    # By passing the custom prompt right here, we make the global compilation
+    # fully dynamic for any city provided at runtime.
+    agent_input = {
+        "messages": [
             SystemMessage(
                 content=(
                     f"You are an expert real estate compliance agent. Discover local multi-family "
@@ -35,44 +69,23 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
                     f"3. Gather verifiable density facts before finishing."
                 )
             ),
-            HumanMessage(
-                content=f"Perform a comprehensive zoning search for multi-family property upgrades in {target_city}.")
+            HumanMessage(content=f"Perform a comprehensive zoning search for multi-family property upgrades in {target_city}.")
         ]
+    }
 
-    tools_list = await UnifiedMCPGateway.get_tools(
-        allowed_tool_names=["brave_search", "fetch_service"],
-    )
-    llm_with_tools = base_model.bind(tools=tools_list)
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, "🤖 Booting agent harness & scanning municipal registries...")
 
-    await log_agent_content(NodeName.ZONING_LAW_AGENT, "🤖 Analyzing historical log and determining next action...")
+    # 3. Invoke the worker agent with our starting context package
+    agent_output = await agent.ainvoke(agent_input)
 
-    response = await llm_with_tools.ainvoke(messages)
+    await log_agent_content(NodeName.ZONING_LAW_AGENT, "✅ Structured compilation complete. Updating graph state.")
 
-    if response.tool_calls:
-        return {
-            "messages": [response]
-        }
-
-    await log_agent_content(NodeName.ZONING_LAW_AGENT, "✨ Research complete. Compiling structured legal summary...")
-
-    structured_llm = base_model.with_structured_output(ZoningLawAgentOutput)
-
-    extraction_prompt = [
-        SystemMessage(
-            content=(
-                "You are an expert real estate attorney. Look over the provided research log history. "
-                "Extract and parse local ordinances, building codes, density caps, and height restrictions "
-                "into the required structured formatting schema."
-            )
-        )
-        ] + messages + [response]  # Inject all collected search and page text records directly into the parser
-
-    extraction_result: ZoningLawAgentOutput = await structured_llm.ainvoke(extraction_prompt)
-
-    await log_agent_content(NodeName.ZONING_LAW_AGENT, "✅ Structured state updated. Passing control forward.")
+    # 4. Extract the validated Pydantic object from the standardized output channel
+    extraction_result: ZoningLawAgentOutput = agent_output["structured_response"]
 
     return {
         "zoning_laws": extraction_result,
+        # Append node status updates to your parent graph state trace
         "messages": [
             AIMessage(
                 content="Zoning Law Agent: Completed live municipal registry scanning and structured regulatory parsing.",
@@ -81,7 +94,11 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-# --- PRIVATELY SCORED MOCK PROVIDER ---
+
+# =====================================================================
+# 3. PRIVATELY SCORED MOCK PROVIDER
+# =====================================================================
+
 async def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
     """
     Returns a static state-update payload mimicking a successful compliance registry tool database check,
@@ -89,7 +106,6 @@ async def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
     """
     await log_agent_content(NodeName.ZONING_LAW_AGENT, "🔄 [MOCK] Zoning Law Agent: Using mock data")
 
-    # Safely unfold parameters from the ingest layer for formatting the mock text
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
     mock_zoning_result = (
@@ -101,7 +117,6 @@ async def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
         "Policy Notice: City council passing new transit-oriented development guidelines next quarter."
     )
 
-    # Instantiate the typed output object explicitly to match the Graph state expectations
     mock_payload = ZoningLawAgentOutput(
         zoning_laws=mock_zoning_result
     )

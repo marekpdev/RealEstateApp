@@ -6,7 +6,6 @@ class NodeName(str, Enum):
     MARKET_DATA_AGENT = "market_data_agent"
     NEIGHBORHOOD_VIBE_AGENT = "neighborhood_vibe_agent"
     ZONING_LAW_AGENT = "zoning_law_agent"
-    ZONING_LAW_TOOL_NODE = "zoning_law_tool_node"
     FINANCIAL_MODELER_AGENT = "financial_modeler_agent"
 
 class LLMModelType(str, Enum):
