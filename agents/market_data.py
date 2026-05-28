@@ -1,5 +1,3 @@
-import asyncio
-
 from langchain_core.messages import SystemMessage, AIMessage
 
 from config import NodeName, config
@@ -8,10 +6,9 @@ from config.llm import base_model
 from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
-from pathlib import Path
 
 from utils.logger import log_agent_header, log_agent_content, log_message
-from utils.utils import print_model
+from utils.utils import print_model, load_mock_fixture
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
@@ -31,7 +28,7 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
 
     api_metrics: RealEstateGatewayModel = await gateway.fetch_market_metrics(target_city)
 
-    if(config.DEBUG_MODE):
+    if config.DEBUG_MODE:
         await log_agent_content(NodeName.MARKET_DATA_AGENT, f"🔄Total listings {api_metrics.total_listings}")
 
     print_model(api_metrics)
@@ -83,21 +80,7 @@ async def _get_market_data_mock_llm_response() -> dict:
     """
     await log_agent_content(NodeName.MARKET_DATA_AGENT, "🔄 [MOCK] Market Data Agent: Using mock data")
 
-    fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_market_data_output_payload.json"
-
-    if not fixture_path.exists():
-        raise FileNotFoundError(
-            f"Mock configuration failure: The target JSON file was not found at {fixture_path}"
-        )
-
-    try:
-        raw_json_content = fixture_path.read_text(encoding="utf-8")
-        mock_payload = MarketDataAgentOutput.model_validate_json(raw_json_content)
-
-    except Exception as e:
-        raise ValueError(
-            f"Data Integrity Fault: Failed to validate mock JSON structure into MarketDataAgentOutput. Error: {e}"
-        )
+    mock_payload = load_mock_fixture("mock_market_data_output_payload.json", MarketDataAgentOutput)
 
     return {
         "market_data": mock_payload,

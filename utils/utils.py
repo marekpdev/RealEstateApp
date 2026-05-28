@@ -1,7 +1,8 @@
 import json
 import os
-from typing import TypeVar, Any
+from typing import TypeVar, Any, Type
 from pydantic import BaseModel
+from pathlib import Path
 
 # Create a Type Generic variable bound to Pydantic's BaseModel
 T = TypeVar("T", bound=BaseModel)
@@ -38,3 +39,23 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     """Safely extracts an environment variable and parses it directly into a Boolean."""
     fallback_str = "false" if default else "true"
     return os.getenv(key, fallback_str).lower() in ("true", "1", "yes")
+
+def load_mock_fixture(fixture_name: str, model_class: Type[T]) -> T:
+    """
+    Loads a JSON fixture from tests/fixtures and validates it against the provided Pydantic model.
+    """
+    project_root = Path(__file__).parent.parent
+    fixture_path = project_root / "tests" / "fixtures" / fixture_name
+
+    if not fixture_path.exists():
+        raise FileNotFoundError(
+            f"Mock configuration failure: The target JSON file was not found at {fixture_path}"
+        )
+
+    try:
+        raw_json_content = fixture_path.read_text(encoding="utf-8")
+        return model_class.model_validate_json(raw_json_content)
+    except Exception as e:
+        raise ValueError(
+            f"Data Integrity Fault: Failed to validate mock JSON structure into {model_class.__name__}. Error: {e}"
+        )

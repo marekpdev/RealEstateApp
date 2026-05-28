@@ -10,7 +10,7 @@ from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
 from tools.tools import UnifiedMCPGateway
 from utils.logger import log_agent_header, log_agent_content
-from utils.utils import print_model
+from utils.utils import print_model, load_mock_fixture
 
 _COMPILED_ZONING_AGENT = None
 
@@ -79,7 +79,7 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
 
     # Handle Mock Execution
     if MOCK_ZONING_LAW_AGENT_OUTPUT:
-        return await _get_zoning_law_mock_response(state)
+        return await _get_zoning_law_mock_response()
 
     # 1. Fetch the globally cached agent harness
     agent = await _get_compiled_zoning_agent()
@@ -167,27 +167,14 @@ async def log_tool_end(self, output, **kwargs):
 # 3. PRIVATELY SCORED MOCK PROVIDER
 # =====================================================================
 
-async def _get_zoning_law_mock_response(state: OverallGraphState) -> dict:
+async def _get_zoning_law_mock_response() -> dict:
     """
     Returns a static state-update payload mimicking a successful compliance registry tool database check,
     instantiated securely through ZoningLawAgentOutput for type-safety.
     """
     await log_agent_content(NodeName.ZONING_LAW_AGENT, "🔄 [MOCK] Zoning Law Agent: Using mock data")
 
-    target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-
-    mock_zoning_result = (
-        f"Municipal Ordinance & Land-Use Registry Check for {target_city}:\n"
-        "- Brickell (Zone T6-48-O / High-Density Core): Allows maximum 48 stories. Mixed-use commercial/residential overlay. "
-        "Short-term rentals (STR) restricted to buildings with specific hotel licensing.\n"
-        "- Wynwood (Zone NRD-1 / Neighborhood Revitalization District): 5-story height cap enforced to preserve neighborhood scale. "
-        "Live-work units encouraged. STR permitted with strict transient occupancy taxes.\n"
-        "Policy Notice: City council passing new transit-oriented development guidelines next quarter."
-    )
-
-    mock_payload = ZoningLawAgentOutput(
-        zoning_laws=mock_zoning_result
-    )
+    mock_payload = load_mock_fixture("mock_zoning_law_output_payload.json", ZoningLawAgentOutput)
 
     return {
         "zoning_laws": mock_payload,
