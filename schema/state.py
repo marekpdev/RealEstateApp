@@ -26,7 +26,7 @@ class ZoningLawAgentOutput(BaseModel):
     """
     zoning_laws: str = Field(
         ...,
-        description="Local municipal zoning ordinances, building height/density restrictions, and short-term rental (STR) legal frameworks."
+        description="A concise synthesis of key multi-family zoning metrics (height, density, setbacks) and STR regulations identified for the target market. If specific metrics are not found in 1-2 quick searches, explicitly state they are unknown."
     )
 
 class FinancialModelerAgentOutput(BaseModel):
@@ -56,7 +56,7 @@ class OverallGraphState(BaseModel):
     )
     zoning_laws: Optional[ZoningLawAgentOutput] = Field(
         None,
-        description="Nested model holding local municipal constraints and rental ordinances."
+        description="Nested model holding the synthesized zoning and regulatory research summary."
     )
     financial_report: Optional[FinancialModelerAgentOutput] = Field(
         None,

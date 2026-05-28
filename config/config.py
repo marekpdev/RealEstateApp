@@ -4,7 +4,9 @@ from utils.utils import get_env_bool
 
 load_dotenv()
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if GITHUB_TOKEN:
     print(f"Success! Key loaded. (Starts with: {GITHUB_TOKEN[:5]})")
@@ -18,5 +20,6 @@ MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT = get_env_bool("MOCK_NEIGHBORHOOD_VIBE_AGENT
 MOCK_ZONING_LAW_AGENT_OUTPUT = get_env_bool("MOCK_ZONING_LAW_AGENT_OUTPUT")
 
 MOCK_MARKET_DATA_API = get_env_bool("MOCK_MARKET_DATA_API")
+MOCK_ZONING_LAW_MCP_OUTPUT = get_env_bool("MOCK_ZONING_LAW_MCP_OUTPUT")
 
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
