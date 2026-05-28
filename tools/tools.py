@@ -57,6 +57,7 @@ class UnifiedMCPGateway:
         for tool in all_discovered_tools:
             if hasattr(tool, 'args_schema') and isinstance(tool.args_schema, dict):
                 _sanitize_schema(tool.args_schema)
+                _apply_token_optimizations(tool.name, tool.args_schema)
 
         # 5. Apply optional tool-level filtering
         if not allowed_tool_names:
@@ -79,3 +80,23 @@ def _sanitize_schema(schema: dict):
             for item in value:
                 if isinstance(item, dict):
                     _sanitize_schema(item)
+
+def _apply_token_optimizations(tool_name: str, schema: dict):
+    """Injects more restrictive defaults to prevent token overflow on small-context models."""
+    properties = schema.get('properties', {})
+
+    if tool_name == 'fetch':
+        if 'max_length' in properties:
+            # Lowering default from 5000 to 2000 characters
+            properties['max_length']['default'] = 2000
+            # Capping max length to 10k to prevent LLM from requesting massive dumps
+            properties['max_length']['maximum'] = 10000
+            if 'exclusiveMaximum' in properties['max_length']:
+                del properties['max_length']['exclusiveMaximum']
+
+    elif tool_name == 'brave_web_search':
+        if 'count' in properties:
+            # Lowering default from 10 to 4 results
+            properties['count']['default'] = 3
+            # Capping count to 10
+            properties['count']['maximum'] = 5

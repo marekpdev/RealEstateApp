@@ -14,15 +14,7 @@ from utils.utils import print_model
 
 _COMPILED_ZONING_AGENT = None
 
-# TODO generally it works but is doing multiple loops
-# e.g.
-# Tool 'brave_web_search' is being used. Args: {'query': 'Los Angeles zoning multi-family property upgrades', 'count': 10, 'offset': 0}
-# 5+ Tool 'fetch' is being used. Args: (taken from previous brave_web_search)
-# Tool 'brave_web_search' is being used. Args: {'query': 'Los Angeles multifamily property zoning regulations upgrades', 'count': 10, 'offset': 0}
-# 5+ Tool 'fetch' is being used. Args: (taken from previous brave_web_search)
-# Tool 'brave_web_search' is being used. Args: {'query': 'Los Angeles multi-family zoning upgrade ordinances 2026', 'count': 10, 'offset': 0}
-# 5+ Tool 'fetch' is being used. Args: (taken from previous brave_web_search)
-# so I am burning through tokens a lot, so I need to use mini models for cheap results, or better, some free GitHub model
+# Generally it works. We have optimized loops and fetch budget to prevent token overflow.
 async def _get_compiled_zoning_agent():
     """
     Lazy-loads and caches the modern unified agent instance to prevent
@@ -40,14 +32,23 @@ async def _get_compiled_zoning_agent():
     )
 
     system_instructions = (
-        "You are an expert real estate compliance agent.\n\n"
+        "You are an expert real estate compliance agent specializing in municipal zoning and land-use regulations. "
+        "Your task is to research multi-family zoning rules for the city provided in the user message. "
+        "This is a PET PROJECT; prioritize SPEED and SIMPLICITY over exhaustive research.\n\n"
         "⚠️ MANDATORY TOOL RULE:\n"
-        "You have ZERO internal knowledge about the target city. You MUST execute 'brave_web_search' "
-        "at least once to find live 2026 data. Do not generate the final response from memory.\n\n"
+        "1. ZERO INTERNAL KNOWLEDGE: You MUST execute 'brave_web_search' at least once. Do NOT use memory.\n"
+        "2. SATISFACTION CRITERIA: As soon as you find ANY relevant zoning facts (even if incomplete), STOP and return them. "
+        "Partial data is 100% acceptable. 'Good enough' is the goal.\n"
+        "3. SEARCH BUDGET: Strictly limit yourself to 1-2 'brave_web_search' calls. Do NOT refine queries or search again "
+        "if the first search yielded any useful snippets. Do NOT obsess over finding 2026 data specifically.\n"
+        "4. FETCH BUDGET: Avoid 'fetch' if possible. Only fetch if search snippets are completely empty. Max 1 fetch call.\n"
+        "5. TOKEN ECONOMY: Stay within the 8000 token limit. Use 'count': 3 for searches.\n"
+        "6. STOP CONDITION: Tool usage MUST cease as soon as you have a baseline understanding of the city's zoning.\n\n"
         "CRITICAL WORKFLOW:\n"
-        "1. Call 'brave_web_search' to get live municipal registry text.\n"
-        "2. Use 'fetch' if any references or URLs cut off.\n"
-        "3. Populate the final structured output schema strictly using facts gathered from these tool calls."
+        "1. Call 'brave_web_search' once. Review results.\n"
+        "2. If snippets provide ANY details on multi-family rules, immediately populate the structured output.\n"
+        "3. Only use 'fetch' as a last resort if snippets are non-existent.\n"
+        "4. Finish immediately. Do not loop back for more precision."
     )
 
     # Instantiate the modern unified agent framework
@@ -86,11 +87,11 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
     # 2. Construct a clean starting input state for this agent run.
-    # By passing the custom prompt right here, we make the global compilation
-    # fully dynamic for any city provided at runtime.
+    # We pass the target city as the primary task; the cached agent 
+    # handles the behavioral constraints via its internal system instructions.
     agent_input = {
         "messages": [
-            HumanMessage(content=f"Perform a comprehensive zoning search for multi-family property upgrades in {target_city}.")
+            HumanMessage(content=f"Research multi-family zoning in: {target_city}")
         ]
     }
 
@@ -99,8 +100,16 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
         "callbacks": [
-            type("ToolLogger", (AsyncCallbackHandler,), {"on_tool_start": log_tool})()
-        ]
+            type(
+                "ToolLogger",
+                (AsyncCallbackHandler,),
+                {
+                    "on_tool_start": log_tool_start,
+                    "on_tool_end": log_tool_end
+                }
+            )()
+        ],
+        "recursion_limit": 5
     }
 
     agent_output = await agent.ainvoke(
@@ -126,12 +135,33 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-async def log_tool(self, serialized, input_str, **kwargs):
-        print(f"DEBUG LOGGING TOOL {serialized.get('name', 'Unknown')}")
+async def log_tool_start(self, serialized, input_str, **kwargs):
+        print(f"DEBUG log_tool_start {serialized.get('name', 'Unknown')}")
         await log_agent_content(
             NodeName.ZONING_LAW_AGENT,
             f"🛠️ Tool '{serialized.get('name', 'Unknown')}' is being used. Args: {input_str}"
         )
+
+
+async def log_tool_end(self, output, **kwargs):
+    """
+    Triggers automatically when an MCP tool finishes execution.
+    Splits long outputs to prevent messy logs.
+    """
+    print(f"DEBUG log_tool_end")
+    output_str = str(output)
+
+    # Optional: Truncate what you print to the console so 50k tokens don't spam your terminal
+    preview_limit = 1000
+    if len(output_str) > preview_limit:
+        preview = output_str[:preview_limit] + f"\n... [Truncated for preview, total size: {len(output_str)} chars] ..."
+    else:
+        preview = output_str
+
+    await log_agent_content(
+        NodeName.ZONING_LAW_AGENT,
+        f"📥 Tool Execution Complete. Output Response:\n{preview}"
+    )
 
 # =====================================================================
 # 3. PRIVATELY SCORED MOCK PROVIDER
