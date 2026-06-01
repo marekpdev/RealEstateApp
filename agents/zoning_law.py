@@ -8,7 +8,7 @@ from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
 from tools import UnifiedMCPGateway, search_zoning_laws
-from utils.logger import log_agent_header, log_agent_content
+from utils.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from utils.callbacks import ToolLoggingCallbackHandler
 
@@ -120,6 +120,8 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
 
     print_model(extraction_result)
 
+    await log_agent_footer(NodeName.ZONING_LAW_AGENT)
+
     return {
         "zoning_laws": extraction_result,
         # Append node status updates to your parent graph state trace
@@ -143,6 +145,8 @@ async def _get_zoning_law_mock_response() -> dict:
     await log_agent_content(NodeName.ZONING_LAW_AGENT, "🔄 [MOCK] Zoning Law Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_zoning_law_output_payload.json", ZoningLawAgentOutput)
+
+    await log_agent_footer(NodeName.ZONING_LAW_AGENT)
 
     return {
         "zoning_laws": mock_payload,

@@ -4,41 +4,42 @@ from typing import List
 
 class PropertyRecord(BaseModel):
     """Strict structural mirror of an individual real estate listing."""
-    zpid: str = Field(..., description="Unique Zillow Property Identification token.")
-    homeStatus: str = Field(..., description="Active market listing state (e.g., FOR_SALE).")
-    address: str = Field(..., description="Complete legible geographic street mailing address.")
-    city: str = Field(..., description="The city or municipality where the home resides.")
-    state: str = Field(..., description="The two-letter state classification code.")
-    zipcode: str = Field(..., description="The localized postal zip code.")
-    price: float = Field(..., description="The current active listing price denominated in USD.")
-    bedrooms: int = Field(..., description="Total count of dedicated bedroom spaces.")
-    bathrooms: int = Field(..., description="Total count of dedicated bathroom spaces.")
-    livingArea: float = Field(..., description="Total square footage or interior living space area.")
+    zpid: str | None = Field(default=None, description="Unique Zillow Property Identification token.")
+    homeStatus: str | None = Field(default=None, description="Active market listing state (e.g., FOR_SALE).")
+    address: str | None = Field(default=None, description="Complete legible geographic street mailing address.")
+    city: str | None = Field(default=None, description="The city or municipality where the home resides.")
+    state: str | None = Field(default=None, description="The two-letter state classification code.")
+    zipcode: str | None = Field(default=None, description="The localized postal zip code.")
+    price: float | None = Field(default=None, description="The current active listing price denominated in USD.")
+    bedrooms: int | None = Field(default=None, description="Total count of dedicated bedroom spaces.")
+    bathrooms: int | None = Field(default=None, description="Total count of dedicated bathroom spaces.")
+    livingArea: float | None = Field(default=None, description="Total square footage or interior living space area.")
 
 class RealEstateGatewayModel(BaseModel):
     """
-        Strongly typed real estate telemetry containing raw math metrics,
-        AI indicators, and the complete array of actual raw listings.
+    Strongly typed real estate telemetry containing raw math metrics,
+    AI indicators, and the complete array of actual raw listings.
     """
-    requested_location: str = Field(
-        ..., description="The target geographic city, neighborhood, or zip code parameter queried."
+    requested_location: str | None = Field(
+        default=None, description="The target geographic city, neighborhood, or zip code parameter queried."
     )
-    total_listings: int = Field(
-        ..., description="The total number of active property listings processed in this batch."
+    total_listings: int | None = Field(
+        default=None, description="The total number of active property listings processed in this batch."
     )
-    average_price: float = Field(
-        ..., description="The arithmetic mean price derived across all matching active properties."
+    average_price: float | None = Field(
+        default=None, description="The arithmetic mean price derived across all matching active properties."
     )
-    median_price: float = Field(
-        ..., description="The middle value separating the higher half from the lower half of listings."
+    median_price: float | None = Field(
+        default=None, description="The middle value separating the higher half from the lower half of listings."
     )
-    highest_listing: float = Field(
-        ..., description="The highest active market price pulled from the regional dataset."
+    highest_listing: float | None = Field(
+        default=None, description="The highest active market price pulled from the regional dataset."
     )
-    lowest_listing: float = Field(
-        ..., description="The lowest active market price pulled from the regional dataset."
+    lowest_listing: float | None = Field(
+        default=None, description="The lowest active market price pulled from the regional dataset."
     )
-    raw_properties: List[PropertyRecord] = Field(
+    # Using modern native list[...] type syntax optimized for Python 3.12
+    raw_properties: list[PropertyRecord] = Field(
         default_factory=list,
         description="The complete list of matching individual property records retrieved from the API gateway."
     )

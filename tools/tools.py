@@ -1,5 +1,7 @@
 # tools
 from typing import Optional, List
+from langchain_core.tools import Tool
+from langchain_experimental.utilities import PythonREPL
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
@@ -103,6 +105,17 @@ class UnifiedMCPGateway:
             print("=" * 60 + "\n")
 
         return processed_tools
+
+# Instantiate a local secure sandboxed Python executor
+python_repl = PythonREPL()
+
+repl_tool = Tool(
+    name="python_repl",
+    description="A Python shell. Use this to execute mathematical equations, compound interest formulas, "
+                "or real estate metrics calculations. Input should be valid python code. "
+                "Always print your final calculations so you can read the output.",
+    func=python_repl.run,
+)
 
 def _sanitize_schema(schema: dict):
     """Recursively removes unsupported JSON schema fields like 'format': 'uri'."""
