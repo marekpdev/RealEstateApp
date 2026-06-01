@@ -7,7 +7,7 @@ from config.config import MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
 from tools import UnifiedMCPGateway
-from utils.logger import log_agent_header, log_agent_content
+from utils.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from utils.callbacks import ToolLoggingCallbackHandler
 
@@ -105,6 +105,8 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
 
     print_model(extraction_result)
 
+    await log_agent_footer(NodeName.NEIGHBORHOOD_VIBE_AGENT)
+
     return {
         "neighborhood_vibe": extraction_result,
         "messages": [
@@ -124,6 +126,8 @@ async def _get_neighborhood_vibe_mock_response() -> dict:
     await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "🔄 [MOCK] Neighborhood Vibe Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_neighborhood_vibe_output_payload.json", NeighborhoodVibeAgentOutput)
+
+    await log_agent_footer(NodeName.NEIGHBORHOOD_VIBE_AGENT)
 
     return {
         "neighborhood_vibe": mock_payload,

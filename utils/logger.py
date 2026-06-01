@@ -1,6 +1,7 @@
 # utils/logger.py
 import chainlit as cl
 import sys
+from datetime import datetime
 
 from chainlit.context import ChainlitContextException
 
@@ -78,4 +79,22 @@ async def render_financial_report(text: str):
         sys.stdout.write("═" * 60 + "\n")
         sys.stdout.write(text + "\n")
         sys.stdout.write("═" * 60 + "\n\n")
+        sys.stdout.flush()
+
+async def log_agent_footer(key: str):
+    """
+    Marks the agent's Step drawer as completed in Chainlit.
+    This ensures that subsequent messages appear AFTER the step in the UI.
+    """
+    if _is_chainlit_active():
+        active_steps = cl.user_session.get("active_agent_steps") or {}
+        if key in active_steps:
+            step = active_steps[key]
+            step.end = datetime.now().isoformat()
+            await step.update()
+            # Clean up the session reference
+            del active_steps[key]
+    else:
+        # CLI Fallback: Optional separator
+        sys.stdout.write(f"🏁 [{key.replace('_', ' ').upper()} COMPLETED]\n")
         sys.stdout.flush()

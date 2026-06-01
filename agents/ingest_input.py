@@ -4,7 +4,7 @@ from config import NodeName
 from config.config import MOCK_INGEST_INPUT_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, IngestInputAgentOutput
-from utils.logger import log_agent_header, log_agent_content
+from utils.logger import log_agent_header, log_agent_content, log_agent_footer
 
 
 async def ingest_input_agent_node(state: OverallGraphState) -> dict:
@@ -40,6 +40,8 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
     ])
 
     # Step 4: Construct and return the state update payload nested under the correct state key
+    await log_agent_footer(NodeName.INGEST_INPUT_AGENT)
+
     return {
         "ingest_input": extraction_result,
         "messages": [
@@ -66,6 +68,8 @@ async def _get_ingest_mock_response() -> dict:
     )
 
     # Return the validated Pydantic object directly under 'ingest_input'
+    await log_agent_footer(NodeName.INGEST_INPUT_AGENT)
+
     return {
         "ingest_input": mock_payload,
         "messages": [

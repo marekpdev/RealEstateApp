@@ -2,7 +2,7 @@ from langchain_core.messages import AIMessage
 
 from config import NodeName
 from schema.state import OverallGraphState
-from utils.logger import log_agent_header, log_agent_content
+from utils.logger import log_agent_header, log_agent_content, log_agent_footer
 
 
 async def supervisor_agent_node(state: OverallGraphState) -> dict:
@@ -17,6 +17,8 @@ async def supervisor_agent_node(state: OverallGraphState) -> dict:
     max_budget = state.ingest_input.budget if state.ingest_input else "Unknown Budget"
 
     await log_agent_content(NodeName.SUPERVISOR_AGENT, f"🔄 Supervisor Agent: Using data: city '{target_city}' and max budget '{max_budget}'.")
+
+    await log_agent_footer(NodeName.SUPERVISOR_AGENT)
 
     return {
         "messages": [
