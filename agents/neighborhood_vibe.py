@@ -1,4 +1,3 @@
-from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
@@ -10,6 +9,7 @@ from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
 from tools import UnifiedMCPGateway
 from utils.logger import log_agent_header, log_agent_content
 from utils.utils import print_model
+from utils.callbacks import ToolLoggingCallbackHandler
 
 _COMPILED_NEIGHBORHOOD_VIBE_AGENT = None
 
@@ -89,16 +89,7 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
 
     # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
-        "callbacks": [
-            type(
-                "ToolLogger",
-                (AsyncCallbackHandler,),
-                {
-                    "on_tool_start": log_tool_start,
-                    "on_tool_end": log_tool_end
-                }
-            )()
-        ],
+        "callbacks": [ToolLoggingCallbackHandler(NodeName.NEIGHBORHOOD_VIBE_AGENT)],
         "recursion_limit": 10
     }
 
@@ -123,35 +114,6 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
             )
         ]
     }
-
-
-async def log_tool_start(self, serialized, input_str, **kwargs):
-    print(f"DEBUG log_tool_start {serialized.get('name', 'Unknown')}")
-    await log_agent_content(
-        NodeName.NEIGHBORHOOD_VIBE_AGENT,
-        f"🛠️ Tool '{serialized.get('name', 'Unknown')}' is being used. Args: {input_str}"
-    )
-
-
-async def log_tool_end(self, output, **kwargs):
-    """
-    Triggers automatically when an MCP tool finishes execution.
-    Splits long outputs to prevent messy logs.
-    """
-    print(f"DEBUG log_tool_end")
-    output_str = str(output)
-
-    # Optional: Truncate what you print to the console so 50k tokens don't spam your terminal
-    preview_limit = 1000
-    if len(output_str) > preview_limit:
-        preview = output_str[:preview_limit] + f"\n... [Truncated for preview, total size: {len(output_str)} chars] ..."
-    else:
-        preview = output_str
-
-    await log_agent_content(
-        NodeName.NEIGHBORHOOD_VIBE_AGENT,
-        f"📥 Tool Execution Complete. Output Response:\n{preview}"
-    )
 
 
 # --- PRIVATELY SCORED MOCK PROVIDER ---
