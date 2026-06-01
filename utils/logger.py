@@ -61,3 +61,21 @@ async def log_message(text: str):
         # 💻 CLI Fallback
         sys.stdout.write(f"\n💬 [Message]: {text}\n")
         sys.stdout.flush()
+
+async def render_financial_report(text: str):
+    """
+    Renders the final financial report using high-fidelity Markdown in Chainlit
+    or a structured format in the console.
+    """
+    if _is_chainlit_active():
+        # Use cl.Message for high-fidelity markdown rendering. 
+        # This allows the report to use the full UI width and render HTML/Markdown correctly.
+        await cl.Message(content=text).send()
+    else:
+        # 💻 CLI Fallback: Beautiful terminal rendering
+        sys.stdout.write("\n" + "═" * 60 + "\n")
+        sys.stdout.write(" 📊 FINAL REAL ESTATE INVESTMENT REPORT\n")
+        sys.stdout.write("═" * 60 + "\n")
+        sys.stdout.write(text + "\n")
+        sys.stdout.write("═" * 60 + "\n\n")
+        sys.stdout.flush()

@@ -7,7 +7,7 @@ from config.config import MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, FinancialModelerAgentOutput
 from tools import repl_tool
-from utils.logger import log_agent_header, log_agent_content
+from utils.logger import log_agent_header, log_agent_content, render_financial_report
 from utils.utils import print_model, load_mock_fixture
 from utils.callbacks import ToolLoggingCallbackHandler
 
@@ -101,7 +101,7 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
 
     print_model(extraction_result)
 
-    await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, extraction_result.financial_report)
+    await render_financial_report(extraction_result.financial_report)
 
     return {
         "financial_report": extraction_result,
@@ -123,7 +123,7 @@ async def _get_financial_modeler_mock_response() -> dict:
 
     mock_payload = load_mock_fixture("mock_financial_modeler_output_payload.json", FinancialModelerAgentOutput)
 
-    await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, mock_payload.financial_report)
+    await render_financial_report(mock_payload.financial_report)
 
     return {
         "financial_report": mock_payload,
