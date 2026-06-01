@@ -114,7 +114,7 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
                 }
             )()
         ],
-        "recursion_limit": 5
+        "recursion_limit": 10
     }
 
     agent_output = await agent.ainvoke(
