@@ -8,7 +8,7 @@ from config.llm import base_model
 from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
 from tools import UnifiedMCPGateway
 from utils.logger import log_agent_header, log_agent_content
-from utils.utils import print_model
+from utils.utils import print_model, load_mock_fixture
 from utils.callbacks import ToolLoggingCallbackHandler
 
 _COMPILED_NEIGHBORHOOD_VIBE_AGENT = None
@@ -71,7 +71,7 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     await log_agent_header(NodeName.NEIGHBORHOOD_VIBE_AGENT, "⚙️ Node: Neighborhood Vibe Agent")
 
     if MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT:
-        return await _get_neighborhood_vibe_mock_response(state)
+        return await _get_neighborhood_vibe_mock_response()
 
     # 1. Fetch the globally cached agent harness
     agent = await _get_compiled_neighborhood_vibe_agent()
@@ -115,35 +115,21 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-
 # --- PRIVATELY SCORED MOCK PROVIDER ---
-async def _get_neighborhood_vibe_mock_response(state: OverallGraphState) -> dict:
+async def _get_neighborhood_vibe_mock_response() -> dict:
     """
     Returns a static state-update payload mimicking a successful MCP tool research run,
     instantiated securely through NeighborhoodVibeAgentOutput for type-safety.
     """
     await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "🔄 [MOCK] Neighborhood Vibe Agent: Using mock data")
 
-    # Safely unfold parameters from the ingest layer for formatting the mock text
-    target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
-
-    mock_tool_result = (
-        f"Multi-Source Tool Research for {target_city} Sentiment:\n"
-        "- Brickell: High-density, young professional vibe. Noise complaints up 12%, but transit usage is excellent.\n"
-        "- Wynwood: Creative district, heavy gentrification trends. Local forums note tech company relocations.\n"
-        "Risk Profile: Coastal flood zones require premium property insurance evaluations."
-    )
-
-    # Instantiate the typed output object explicitly to match the Graph state expectations
-    mock_payload = NeighborhoodVibeAgentOutput(
-        neighborhood_vibe=mock_tool_result
-    )
+    mock_payload = load_mock_fixture("mock_neighborhood_vibe_output_payload.json", NeighborhoodVibeAgentOutput)
 
     return {
         "neighborhood_vibe": mock_payload,
         "messages": [
             AIMessage(
-                content="[MOCK] Neighborhood Vibe Agent: Completed multi-source tool search (Wikipedia/OSM). Extracted community logs.",
+                content="[MOCK] Neighborhood Vibe Agent: Using Mock data",
                 name=NodeName.NEIGHBORHOOD_VIBE_AGENT.value
             )
         ]
