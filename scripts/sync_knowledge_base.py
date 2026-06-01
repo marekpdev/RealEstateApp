@@ -1,6 +1,7 @@
 # file: scripts/sync_knowledge_base.py
 import os
 import tempfile
+from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -8,6 +9,9 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 def sync_azure_to_pinecone():
+    # Load environment variables from .env file
+    load_dotenv()
+
     # 1. Authenticate with Azure Storage Account using environment variables
     connect_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if not connect_str:
@@ -16,7 +20,7 @@ def sync_azure_to_pinecone():
     blob_service_client = BlobServiceClient.from_connection_string(connect_str)
     container_client = blob_service_client.get_container_client("zoning-laws")
 
-    print("📥 Scanning Azure Blob Storage for zoning PDFs...")
+    print("Scanning Azure Blob Storage for zoning PDFs...")
     blobs = container_client.list_blobs()
 
     all_chunks = []

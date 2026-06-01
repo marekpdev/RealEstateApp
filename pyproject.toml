@@ -19,6 +19,5 @@ dependencies = [
     "pydantic>=2.13.4",
     "pypdf>=6.12.2",
     "python-dotenv>=1.2.2",
-    "pinecone-client>=5.0.1",
-    "langchain-pinecone>=0.2.0",
+    "pinecone>=5.0.1",
 ]

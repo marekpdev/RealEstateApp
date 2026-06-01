@@ -9,7 +9,7 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "zoning-laws")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "real-estate-app")
 if GITHUB_TOKEN:
     print(f"Success! Key loaded. (Starts with: {GITHUB_TOKEN[:5]})")
 else:
