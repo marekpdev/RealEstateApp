@@ -1,0 +1,51 @@
+{
+  "custom_fonts": [
+    "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+  ],
+  "variables": {
+    "light": {
+      "--background": "180 20% 98%",
+      "--foreground": "185 70% 5%",
+      "--card": "0 0% 100%",
+      "--card-foreground": "185 70% 5%",
+      "--popover": "0 0% 100%",
+      "--popover-foreground": "185 70% 5%",
+      "--primary": "174 85% 35%",
+      "--primary-foreground": "180 20% 98%",
+      "--secondary": "180 15% 94%",
+      "--secondary-foreground": "185 70% 10%",
+      "--muted": "180 10% 90%",
+      "--muted-foreground": "180 15% 40%",
+      "--accent": "180 15% 92%",
+      "--accent-foreground": "174 85% 35%",
+      "--destructive": "0 84% 60%",
+      "--destructive-foreground": "0 0% 100%",
+      "--border": "180 15% 88%",
+      "--input": "180 15% 88%",
+      "--ring": "174 85% 35%",
+      "--radius": "0.75rem"
+    },
+    "dark": {
+      "--background": "190 35% 9%",
+      "--foreground": "180 25% 94%",
+      "--card": "188 30% 13%",
+      "--card-foreground": "180 25% 94%",
+      "--popover": "188 30% 13%",
+      "--popover-foreground": "180 25% 94%",
+      "--primary": "174 85% 45%",
+      "--primary-foreground": "190 35% 9%",
+      "--secondary": "188 20% 18%",
+      "--secondary-foreground": "180 25% 94%",
+      "--muted": "188 15% 22%",
+      "--muted-foreground": "180 12% 65%",
+      "--accent": "188 15% 24%",
+      "--accent-foreground": "174 85% 45%",
+      "--destructive": "0 62.8% 30.6%",
+      "--destructive-foreground": "180 25% 94%",
+      "--border": "188 20% 20%",
+      "--input": "188 20% 20%",
+      "--ring": "174 85% 45%",
+      "--radius": "0.75rem"
+    }
+  }
+}

@@ -33,7 +33,6 @@ Thumbs.db
 # Project local tool folders
 .junie/
 .files/
-tools/
 
 # Testing Harness Cache
 .pytest_cache/
@@ -46,3 +45,4 @@ Dockerfile
 
 # Chainlit dynamic data states
 .chainlit/*
+!.chainlit/config.toml
