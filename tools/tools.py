@@ -16,6 +16,16 @@ MCP_SERVER_REGISTRY = {
         "transport": "stdio",
         "command": "uvx",
         "args": ["mcp-server-fetch"]
+    },
+    "openstreetmap_service": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["osm-mcp-server"]
+    },
+    "wikipedia_service": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["wikipedia-mcp"]
     }
 }
 
@@ -25,14 +35,15 @@ class UnifiedMCPGateway:
     @staticmethod
     async def get_tools(
         server_ids: Optional[List[str]] = None,
-        allowed_tool_names: Optional[List[str]] = None
+        disallowed_tool_names: Optional[List[str]] = None
     ):
         """
-        Dynamically discovers tools from specified MCP servers.
+        Dynamically discovers tools from specified MCP servers while using a denylist
+        to filter out structurally problematic schemas.
 
         :param server_ids: List of server keys from MCP_SERVER_REGISTRY to connect to.
                           If None, connects to all registered servers.
-        :param allowed_tool_names: Optional strict whitelist of tool names to return.
+        :param disallowed_tool_names: Optional list of tools to drop (e.g. ['suggest_meeting_point']).
         """
         # 1. Filter the registry to only include requested servers
         if server_ids is None:
@@ -45,25 +56,53 @@ class UnifiedMCPGateway:
             }
 
         if not config_to_use:
+            print("⚠️ No matching MCP servers found in selection registry.")
             return []
 
-        # 2. Instantiate the client with the targeted configuration
-        client = MultiServerMCPClient(config_to_use)
+        # 2. Instantiate client with targeted configuration and namespace conflict protection
+        # tool_name_prefix=True ensures tool collisions are avoided (e.g., openstreetmap_service_search)
+        client = MultiServerMCPClient(config_to_use, tool_name_prefix=True)
 
-        # 3. Directly await the tool discovery contract hook
-        all_discovered_tools = await client.get_tools()
+        # 3. Directly await the tool discovery contract hook with error boundaries
+        print(f"🔄 Interrogating MCP servers via stdio handshake: {list(config_to_use.keys())}...")
+        try:
+            all_discovered_tools = await client.get_tools()
+        except Exception as e:
+            print(f"❌ CRITICAL HANDSHAKE FAILURE: Client dropped connections. Error: {e}")
+            return []
 
-        # 4. Sanitize tool schemas for OpenAI compatibility (e.g., remove 'format': 'uri')
+        if not all_discovered_tools:
+            print("⚠️ Discovery transaction finished successfully, but zero tools were exposed.")
+            return []
+
+        # 4. Filter out problematic tools using the Denylist, then apply sanitization
+        ignored_tools = set(disallowed_tool_names or [])
+        processed_tools = []
+
         for tool in all_discovered_tools:
+            # Check if tool is on the denylist
+            # Note: If tool_name_prefix=True, check matches prefixed names (e.g., openstreetmap_service_suggest_meeting_point)
+            if tool.name in ignored_tools or any(tool.name.endswith(f"_{banned}") for banned in ignored_tools):
+                print(f"🚫 Denylist Hit: Dropping problematic tool schema -> {tool.name}")
+                continue
+
+            # Sanitize tool schemas for OpenAI compatibility
             if hasattr(tool, 'args_schema') and isinstance(tool.args_schema, dict):
                 _sanitize_schema(tool.args_schema)
                 _apply_token_optimizations(tool.name, tool.args_schema)
 
-        # 5. Apply optional tool-level filtering
-        if not allowed_tool_names:
-            return all_discovered_tools
+            processed_tools.append(tool)
 
-        return [tool for tool in all_discovered_tools if tool.name in allowed_tool_names]
+        # Diagnostic Summary Log
+        if processed_tools:
+            print("\n" + "=" * 60)
+            print(f"✅ DYNAMIC MCP DISCOVERY SUCCESS: {len(processed_tools)} tools loaded.")
+            print("=" * 60)
+            for idx, tool in enumerate(processed_tools, 1):
+                print(f"  🛠️  Tool {idx}: {tool.name}")
+            print("=" * 60 + "\n")
+
+        return processed_tools
 
 def _sanitize_schema(schema: dict):
     """Recursively removes unsupported JSON schema fields like 'format': 'uri'."""
@@ -100,3 +139,7 @@ def _apply_token_optimizations(tool_name: str, schema: dict):
             properties['count']['default'] = 3
             # Capping count to 10
             properties['count']['maximum'] = 5
+    elif tool_name == 'find_amenities_nearby':
+        if 'limit' in properties:
+            properties['limit']['default'] = 15
+            properties['limit']['maximum'] = 30
