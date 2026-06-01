@@ -1,0 +1,194 @@
+/* ==========================================================================
+   1. GLOBAL FRAMEWORK & TYPOGRAPHY ADJUSTMENTS
+   ========================================================================== */
+
+body,
+html,
+#root,
+.prose,
+#message-composer textarea {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+}
+
+html.dark {
+    background-color: hsl(var(--background)) !important;
+}
+
+/* Header customization styled with deep sea slate and crisp turquoise highlights */
+#header {
+    border-bottom: 1px solid hsl(var(--border) / 0.5) !important;
+    background-color: hsl(var(--sidebar-background) / 0.75) !important;
+    backdrop-filter: blur(16px) !important;
+    z-index: 50;
+}
+
+#readme-button, #theme-toggle {
+    border-radius: var(--radius) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+#readme-button:hover {
+    background-color: hsl(var(--primary) / 0.12) !important;
+    color: hsl(var(--primary)) !important;
+}
+
+/* ==========================================================================
+   2. DASHBOARD CARDS: ASSISTANT OUTPUT STREAM (.step)
+   ========================================================================== */
+
+div.step.py-2 {
+    padding: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    border-radius: var(--radius) !important;
+    border: 1px solid transparent !important;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease !important;
+}
+
+div.step.py-2:hover {
+    transform: translateY(-2px);
+}
+
+/* Assistant Rows: Designed with a glow accent border using the new color tokens */
+div.step[data-step-type="assistant_message"] {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    box-shadow: 0 12px 30px -10px hsl(var(--background) / 0.7) !important;
+    position: relative;
+}
+
+/* Vertical turquoise glowing layout strip on the edge of the assistant block */
+div.step[data-step-type="assistant_message"]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, hsl(var(--primary)), hsl(var(--primary) / 0.3));
+    border-top-left-radius: var(--radius);
+    border-bottom-left-radius: var(--radius);
+}
+
+/* ==========================================================================
+   3. DASHBOARD CARDS: ASYMMETRIC USER BOXES
+   ========================================================================== */
+
+div.step[data-step-type="user_message"] {
+    background-color: transparent !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+div.step[data-step-type="user_message"] .bg-accent {
+    background-color: hsl(var(--secondary) / 0.5) !important;
+    border: 1px dashed hsl(var(--border)) !important;
+    border-radius: calc(var(--radius) - 2px) !important;
+    max-width: 80% !important;
+    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.02) !important;
+}
+
+.edit-message {
+    transition: all 0.2s ease !important;
+}
+
+/* ==========================================================================
+   4. AGENT ROUTING PIPELINE TRACK (Multi-Agent Nodes)
+   ========================================================================== */
+
+div.step[data-step-type="undefined"] {
+    background-color: hsl(var(--sidebar-background) / 0.2) !important;
+    border: 1px solid hsl(var(--border) / 0.4) !important;
+    border-radius: var(--radius) !important;
+    padding: 1rem 1.25rem !important;
+}
+
+/* Expandable agent headers (e.g., Node: Supervisor Agent) */
+h3[data-state] button[id^="step-⚙️"] {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    color: hsl(var(--foreground)) !important;
+    padding: 0.4rem 0.85rem !important;
+    background-color: hsl(var(--muted) / 0.4) !important;
+    border-radius: 6px !important;
+    border: 1px solid hsl(var(--border) / 0.5) !important;
+    width: fit-content !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Active agent node highlighted with clear glowing turquoise values */
+h3[data-state="open"] button[id^="step-⚙️"] {
+    color: hsl(var(--primary)) !important;
+    background-color: hsl(var(--primary) / 0.08) !important;
+    border-color: hsl(var(--primary) / 0.4) !important;
+    box-shadow: 0 0 12px hsl(var(--primary) / 0.1) !important;
+}
+
+/* Inner mock execution updates formatted cleanly */
+p[id^="step-🔄"] {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.8rem !important;
+    background-color: hsl(var(--background)) !important;
+    padding: 0.6rem 1rem !important;
+    border-radius: 6px !important;
+    border: 1px solid hsl(var(--border)) !important;
+    color: hsl(var(--muted-foreground)) !important;
+    display: inline-flex !important;
+}
+
+/* Convert the nesting line into a high-tech turquoise optical data pipeline rail */
+.border-l-2.border-primary {
+    border-left-width: 2px !important;
+    border-left-color: hsl(var(--primary) / 0.5) !important;
+    margin-left: 0.85rem !important;
+    padding-left: 1.5rem !important;
+}
+
+/* ==========================================================================
+   5. CONTROL SYSTEM: MESSAGE COMPOSER & ACTIONS
+   ========================================================================== */
+
+#message-composer {
+    border: 1px solid hsl(var(--border)) !important;
+    background-color: hsl(var(--card)) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.4) !important;
+    padding: 1rem !important;
+}
+
+#chat-input {
+    font-size: 0.95rem !important;
+    color: hsl(var(--foreground)) !important;
+}
+
+#upload-button {
+    color: hsl(var(--muted-foreground)) !important;
+    border-radius: 6px !important;
+}
+
+#upload-button:hover {
+    color: hsl(var(--foreground)) !important;
+    background-color: hsl(var(--muted) / 0.6) !important;
+}
+
+/* Make your message submission button look like an illuminated action point */
+#chat-submit {
+    border-radius: 50% !important;
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+#chat-submit:not(:disabled):hover {
+    transform: scale(1.08) translateY(-1px);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.45) !important;
+}
+
+.watermark {
+    margin-top: 0.75rem !important;
+    letter-spacing: 0.04em;
+    font-size: 0.7rem !important;
+    opacity: 0.5 !important;
+}
