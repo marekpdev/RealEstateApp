@@ -1,12 +1,10 @@
-# utils/logger.py
 import chainlit as cl
 import sys
-from datetime import datetime
-
 from chainlit.context import ChainlitContextException
 
 # Safe fallback dictionary to group console outputs beautifully when running via CLI
 _cli_headers = {}
+
 
 def _is_chainlit_active() -> bool:
     """Helper function to safely detect if a Chainlit UI session is live."""

@@ -1,15 +1,14 @@
 from langchain_core.messages import SystemMessage, AIMessage
-
 from config import NodeName, config
 from config.config import MOCK_MARKET_DATA_AGENT_OUTPUT
 from config.llm import base_model
 from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
-
 from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
+
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
@@ -19,7 +18,6 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
     """
     await log_agent_header(NodeName.MARKET_DATA_AGENT, "⚙️ Node: Market Data Agent")
 
-    # Guard Clause Check
     if MOCK_MARKET_DATA_AGENT_OUTPUT:
         return await _get_market_data_mock_llm_response()
 
@@ -61,7 +59,6 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         "If less than 1.5x, classify as 'STABLE'. Otherwise, classify as 'MODERATE'."
     )
 
-    # Step 3: Query listings via the structured model pipeline
     ai_evaluations: LLMMarketEvaluations = await structured_llm.ainvoke([SystemMessage(content=prompt)])
 
     output_payload = MarketDataAgentOutput(

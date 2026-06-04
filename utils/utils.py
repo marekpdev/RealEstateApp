@@ -1,6 +1,6 @@
 import json
 import os
-from typing import TypeVar, Any, Type
+from typing import TypeVar, Type
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -35,10 +35,12 @@ def print_model(model_instance: T, title: str = "MODEL") -> None:
     except Exception as e:
         print(f"❌ [Error] Failed to print schematic framework for model instance. Exception: {e}")
 
+
 def get_env_bool(key: str, default: bool = False) -> bool:
     """Safely extracts an environment variable and parses it directly into a Boolean."""
     fallback_str = "true" if default else "false"
     return os.getenv(key, fallback_str).lower() in ("true", "1", "yes")
+
 
 def load_mock_fixture(fixture_name: str, model_class: Type[T]) -> T:
     """

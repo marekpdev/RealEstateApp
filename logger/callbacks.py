@@ -4,9 +4,6 @@ import asyncio
 from typing import Any, Dict
 from langchain_core.callbacks import AsyncCallbackHandler
 
-# =====================================================================
-# 🛠️ TOOL LOGGING CALLBACK HANDLER
-# =====================================================================
 
 class ToolLoggingCallbackHandler(AsyncCallbackHandler):
     def __init__(self, node_name: Any):

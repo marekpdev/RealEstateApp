@@ -15,7 +15,6 @@ def search_zoning_laws(query: str) -> str:
         return "Pinecone is not configured. Please ensure PINECONE_API_KEY and PINECONE_INDEX_NAME are set."
     
     try:
-        # Perform similarity search
         results = vectorstore.similarity_search(query, k=3)
         
         if not results:

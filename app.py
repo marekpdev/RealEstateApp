@@ -20,7 +20,6 @@ async def on_chat_start():
         MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT - {config.MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT}
         MOCK_ZONING_LAW_AGENT_OUTPUT - {config.MOCK_ZONING_LAW_AGENT_OUTPUT}
         MOCK_MARKET_DATA_API - {config.MOCK_MARKET_DATA_API}
-        MOCK_ZONING_LAW_MCP_OUTPUT - {config.MOCK_ZONING_LAW_MCP_OUTPUT}
         """
         await log_message(debug_message)
 
@@ -31,7 +30,6 @@ async def on_message(message: cl.Message):
     Triggered every time a user types into the chatbox.
     This replaces your __main__ manual text query loops.
     """
-    # 1. Map the user's UI prompt to your LangGraph shape
     inputs = {"messages": [HumanMessage(content=message.content)]}
     config = {"recursion_limit": 20}
 

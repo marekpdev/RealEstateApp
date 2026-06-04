@@ -2,10 +2,8 @@ import pytest
 import respx
 import httpx
 from fastapi import HTTPException
-from pathlib import Path
 from services.base_api_client import BaseAPIClient
 from services.market_data_gateway import RapidRealEstateMarketClient
-from config import config
 
 @pytest.mark.asyncio
 async def test_base_api_client_error_handling():

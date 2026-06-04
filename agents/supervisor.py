@@ -1,5 +1,4 @@
 from langchain_core.messages import AIMessage
-
 from config import NodeName
 from logger.lmm_translator import LogType, compile_ui_log
 from schema.state import OverallGraphState
@@ -13,7 +12,6 @@ async def supervisor_agent_node(state: OverallGraphState) -> dict:
     """
     await log_agent_header(NodeName.SUPERVISOR_AGENT, "⚙️ Node: Supervisor Agent")
 
-    # Extract variables safely from the new nested object layer
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
     max_budget = state.ingest_input.budget if state.ingest_input else "Unknown Budget"
 

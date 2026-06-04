@@ -1,6 +1,5 @@
 # schema/market_data.py
 from pydantic import BaseModel, Field
-from typing import List
 
 class PropertyRecord(BaseModel):
     """Strict structural mirror of an individual real estate listing."""
