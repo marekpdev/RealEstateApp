@@ -59,5 +59,8 @@ logs/
 # Chainlit auto-generated assets and translation files
 .chainlit/*
 !.chainlit/config.toml
+!.chainlit/translations/
+.chainlit/translations/*
+!.chainlit/translations/en-US.json
 
 .junie/

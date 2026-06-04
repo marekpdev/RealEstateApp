@@ -46,3 +46,6 @@ Dockerfile
 # Chainlit dynamic data states
 .chainlit/*
 !.chainlit/config.toml
+!.chainlit/translations/
+.chainlit/translations/*
+!.chainlit/translations/en-US.json
