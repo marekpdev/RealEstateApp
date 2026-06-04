@@ -7,6 +7,7 @@ from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
 from tools import UnifiedMCPGateway, search_zoning_laws
+from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from logger.callbacks import ToolLoggingCallbackHandler
@@ -99,7 +100,14 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-    await log_agent_content(NodeName.ZONING_LAW_AGENT, "🤖 Booting agent harness & scanning municipal registries...")
+    await log_agent_content(
+        NodeName.ZONING_LAW_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.ZONING_LAW_AGENT.value,
+            agent_input["messages"][0].content
+        )
+    )
 
     # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
@@ -118,6 +126,15 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     extraction_result: ZoningLawAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
+
+    await log_agent_content(
+        NodeName.ZONING_LAW_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.ZONING_LAW_AGENT.value,
+            extraction_result.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.ZONING_LAW_AGENT)
 
@@ -144,6 +161,24 @@ async def _get_zoning_law_mock_response() -> dict:
     await log_agent_content(NodeName.ZONING_LAW_AGENT, "🔄 [MOCK] Zoning Law Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_zoning_law_output_payload.json", ZoningLawAgentOutput)
+
+    await log_agent_content(
+        NodeName.ZONING_LAW_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.ZONING_LAW_AGENT.value,
+            "Using pre-configured system simulation parameters."
+        )
+    )
+
+    await log_agent_content(
+        NodeName.ZONING_LAW_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.ZONING_LAW_AGENT.value,
+            mock_payload.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.ZONING_LAW_AGENT)
 

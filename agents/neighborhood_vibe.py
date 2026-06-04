@@ -7,6 +7,7 @@ from config.config import MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, NeighborhoodVibeAgentOutput
 from tools import UnifiedMCPGateway
+from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from logger.callbacks import ToolLoggingCallbackHandler
@@ -85,7 +86,14 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-    await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "🤖 Booting agent harness & scanning local vibes...")
+    await log_agent_content(
+        NodeName.NEIGHBORHOOD_VIBE_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.NEIGHBORHOOD_VIBE_AGENT.value,
+            agent_input["messages"][0].content
+        )
+    )
 
     # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
@@ -104,6 +112,15 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     extraction_result: NeighborhoodVibeAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
+
+    await log_agent_content(
+        NodeName.NEIGHBORHOOD_VIBE_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.NEIGHBORHOOD_VIBE_AGENT.value,
+            extraction_result.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.NEIGHBORHOOD_VIBE_AGENT)
 
@@ -126,6 +143,24 @@ async def _get_neighborhood_vibe_mock_response() -> dict:
     await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "🔄 [MOCK] Neighborhood Vibe Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_neighborhood_vibe_output_payload.json", NeighborhoodVibeAgentOutput)
+
+    await log_agent_content(
+        NodeName.NEIGHBORHOOD_VIBE_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.NEIGHBORHOOD_VIBE_AGENT.value,
+            "Using pre-configured system simulation parameters."
+        )
+    )
+
+    await log_agent_content(
+        NodeName.NEIGHBORHOOD_VIBE_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.NEIGHBORHOOD_VIBE_AGENT.value,
+            mock_payload.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.NEIGHBORHOOD_VIBE_AGENT)
 
