@@ -3,8 +3,9 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from config import NodeName
 from config.config import MOCK_INGEST_INPUT_AGENT_OUTPUT
 from config.llm import base_model
+from logger.lmm_translator import LogType, compile_ui_log
 from schema.state import OverallGraphState, IngestInputAgentOutput
-from utils.logger import log_agent_header, log_agent_content, log_agent_footer
+from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 
 
 async def ingest_input_agent_node(state: OverallGraphState) -> dict:
@@ -20,6 +21,15 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
 
     # Step 1: Retrieve the raw human prompt from the input
     user_message_content = state.messages[-1].content
+
+    await log_agent_content(
+        NodeName.INGEST_INPUT_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.INGEST_INPUT_AGENT.value,
+            user_message_content
+        )
+    )
 
     # Step 2: Bind the extraction schema to your LLM configuration
     structured_llm = base_model.with_structured_output(IngestInputAgentOutput)
@@ -38,6 +48,15 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
             content=f"Analyze and extract fields from this prompt: {user_message_content}"
         )
     ])
+
+    await log_agent_content(
+        NodeName.INGEST_INPUT_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.INGEST_INPUT_AGENT.value,
+            extraction_result.model_dump()
+        )
+    )
 
     # Step 4: Construct and return the state update payload nested under the correct state key
     await log_agent_footer(NodeName.INGEST_INPUT_AGENT)
@@ -65,6 +84,24 @@ async def _get_ingest_mock_response() -> dict:
     mock_payload = IngestInputAgentOutput(
         city="Los Angeles, CA",
         budget="$800,000"
+    )
+
+    await log_agent_content(
+        NodeName.INGEST_INPUT_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.INGEST_INPUT_AGENT.value,
+            "Using pre-configured system simulation parameters."
+        )
+    )
+
+    await log_agent_content(
+        NodeName.INGEST_INPUT_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.INGEST_INPUT_AGENT.value,
+            mock_payload.model_dump()
+        )
     )
 
     # Return the validated Pydantic object directly under 'ingest_input'
