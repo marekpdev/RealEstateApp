@@ -12,7 +12,7 @@ services:
       - .env
     environment:
       - DEBUG_MODE
-      - GITHUB_TOKEN
+      - GH_TOKEN
       - RAPIDAPI_KEY
       - BRAVE_API_KEY
       - MOCK_FINANCIAL_MODELER_AGENT_OUTPUT

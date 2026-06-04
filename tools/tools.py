@@ -137,7 +137,7 @@ def _apply_token_optimizations(tool_name: str, schema: dict):
     """Injects more restrictive defaults to prevent token overflow on small-context models."""
     properties = schema.get('properties', {})
 
-    if tool_name == 'fetch':
+    if tool_name == 'fetch' or tool_name.endswith('_fetch'):
         if 'max_length' in properties:
             # Lowering default from 5000 to 2000 characters
             properties['max_length']['default'] = 2000
@@ -146,13 +146,13 @@ def _apply_token_optimizations(tool_name: str, schema: dict):
             if 'exclusiveMaximum' in properties['max_length']:
                 del properties['max_length']['exclusiveMaximum']
 
-    elif tool_name == 'brave_web_search':
+    elif tool_name == 'brave_web_search' or tool_name.endswith('_brave_web_search'):
         if 'count' in properties:
             # Lowering default from 10 to 4 results
             properties['count']['default'] = 3
             # Capping count to 10
             properties['count']['maximum'] = 5
-    elif tool_name == 'find_amenities_nearby':
+    elif tool_name == 'find_amenities_nearby' or tool_name.endswith('_find_amenities_nearby'):
         if 'limit' in properties:
             properties['limit']['default'] = 15
             properties['limit']['maximum'] = 30

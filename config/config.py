@@ -7,11 +7,11 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GH_TOKEN = os.getenv("GH_TOKEN")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "real-estate-app")
-if GITHUB_TOKEN:
-    print(f"Success! Key loaded. (Starts with: {GITHUB_TOKEN[:5]})")
+if GH_TOKEN:
+    print(f"Success! Key loaded. (Starts with: {GH_TOKEN[:5]})")
 else:
     print("Error: API Key not found. Check your .env file location.")
 

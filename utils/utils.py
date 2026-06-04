@@ -37,7 +37,7 @@ def print_model(model_instance: T, title: str = "MODEL") -> None:
 
 def get_env_bool(key: str, default: bool = False) -> bool:
     """Safely extracts an environment variable and parses it directly into a Boolean."""
-    fallback_str = "false" if default else "true"
+    fallback_str = "true" if default else "false"
     return os.getenv(key, fallback_str).lower() in ("true", "1", "yes")
 
 def load_mock_fixture(fixture_name: str, model_class: Type[T]) -> T:
