@@ -8,7 +8,27 @@ on:
   workflow_dispatch: # Allows you to manually trigger a build via the GitHub UI
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Run tests
+        run: uv run pytest
+        env:
+          PYTHONPATH: .
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
