@@ -1,15 +1,16 @@
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 
-from config import NodeName, config
+from config import NodeName
 from config.config import MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, FinancialModelerAgentOutput
 from tools import repl_tool
-from utils.logger import log_agent_header, log_agent_content, render_financial_report, log_agent_footer
+from logger.lmm_translator import LogType, compile_ui_log
+from logger.logger import log_agent_header, log_agent_content, render_financial_report, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
-from utils.callbacks import ToolLoggingCallbackHandler
+from logger.callbacks import ToolLoggingCallbackHandler
 
 _COMPILED_FINANCIAL_MODELER_AGENT = None
 
@@ -81,7 +82,14 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-    await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, "🤖 Synthesizing report & calculating metrics via Python REPL...")
+    await log_agent_content(
+        NodeName.FINANCIAL_MODELER_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.FINANCIAL_MODELER_AGENT.value,
+            user_message
+        )
+    )
 
     # 4. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
@@ -100,6 +108,15 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     extraction_result: FinancialModelerAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
+
+    await log_agent_content(
+        NodeName.FINANCIAL_MODELER_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.FINANCIAL_MODELER_AGENT.value,
+            extraction_result.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.FINANCIAL_MODELER_AGENT)
 
@@ -124,6 +141,24 @@ async def _get_financial_modeler_mock_response() -> dict:
     await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, "🔄 [MOCK] Financial Modeler Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_financial_modeler_output_payload.json", FinancialModelerAgentOutput)
+
+    await log_agent_content(
+        NodeName.FINANCIAL_MODELER_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.FINANCIAL_MODELER_AGENT.value,
+            "Using pre-configured system simulation parameters."
+        )
+    )
+
+    await log_agent_content(
+        NodeName.FINANCIAL_MODELER_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.FINANCIAL_MODELER_AGENT.value,
+            mock_payload.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.FINANCIAL_MODELER_AGENT)
 

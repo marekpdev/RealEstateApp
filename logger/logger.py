@@ -8,7 +8,6 @@ from chainlit.context import ChainlitContextException
 # Safe fallback dictionary to group console outputs beautifully when running via CLI
 _cli_headers = {}
 
-
 def _is_chainlit_active() -> bool:
     """Helper function to safely detect if a Chainlit UI session is live."""
     try:
@@ -61,7 +60,7 @@ async def log_agent_content(parent_key: str, text: str):
         await child_step.__aenter__()
         await child_step.__aexit__(None, None, None)
     else:
-        # 💻 CLI Fallback: Grab the corresponding header name to structure terminal logs
+        # 💻 CLI Fallback: Grab the corresponding header name to structure terminal logger
         header_title = _cli_headers.get(parent_key, parent_key.upper())
         sys.stdout.write(f"  └── [{header_title}]: {text}\n")
         sys.stdout.flush()

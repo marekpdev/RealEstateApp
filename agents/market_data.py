@@ -7,7 +7,8 @@ from schema.market_data import RealEstateGatewayModel, LLMMarketEvaluations
 from schema.state import OverallGraphState, MarketDataAgentOutput
 from services.market_data_gateway import RapidRealEstateMarketClient
 
-from utils.logger import log_agent_header, log_agent_content, log_message, log_agent_footer
+from logger.lmm_translator import LogType, compile_ui_log
+from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 
 async def market_data_agent_node(state: OverallGraphState) -> dict:
@@ -23,6 +24,15 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
         return await _get_market_data_mock_llm_response()
 
     target_city = state.ingest_input.city if state.ingest_input else "Unknown City"
+
+    await log_agent_content(
+        NodeName.MARKET_DATA_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.MARKET_DATA_AGENT.value,
+            f"Market Data Agent: Fetching real estate metrics for {target_city}."
+        )
+    )
 
     gateway = RapidRealEstateMarketClient.get_client()
 
@@ -61,7 +71,14 @@ async def market_data_agent_node(state: OverallGraphState) -> dict:
 
     print_model(output_payload)
 
-    await log_agent_content(NodeName.MARKET_DATA_AGENT, f"🔄 output_payload evaluations {output_payload.evaluations.pricing_dispersion_risk}")
+    await log_agent_content(
+        NodeName.MARKET_DATA_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.MARKET_DATA_AGENT.value,
+            output_payload.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.MARKET_DATA_AGENT)
 
@@ -83,6 +100,24 @@ async def _get_market_data_mock_llm_response() -> dict:
     await log_agent_content(NodeName.MARKET_DATA_AGENT, "🔄 [MOCK] Market Data Agent: Using mock data")
 
     mock_payload = load_mock_fixture("mock_market_data_output_payload.json", MarketDataAgentOutput)
+
+    await log_agent_content(
+        NodeName.MARKET_DATA_AGENT,
+        await compile_ui_log(
+            LogType.NODE_START,
+            NodeName.MARKET_DATA_AGENT.value,
+            "Using pre-configured system simulation parameters."
+        )
+    )
+
+    await log_agent_content(
+        NodeName.MARKET_DATA_AGENT,
+        await compile_ui_log(
+            LogType.NODE_SUMMARY,
+            NodeName.MARKET_DATA_AGENT.value,
+            mock_payload.model_dump()
+        )
+    )
 
     await log_agent_footer(NodeName.MARKET_DATA_AGENT)
 

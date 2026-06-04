@@ -2,7 +2,7 @@ from langchain_core.messages import HumanMessage
 import chainlit as cl
 from config import config
 from graph import compiledStateGraph
-from utils.logger import log_message
+from logger.logger import log_message
 
 @cl.on_chat_start
 async def on_chat_start():
