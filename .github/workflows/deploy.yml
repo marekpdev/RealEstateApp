@@ -54,7 +54,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
+          password: ${{ github.token }}
 
       # Step 3: Automatically manage tags (assigns :latest on main branch, :pr-<num> on PRs)
       - name: Extract Docker metadata
