@@ -8,7 +8,7 @@ from logger.logger import log_message
 async def on_chat_start():
     """Initializes the session when a recruiter opens the webpage."""
     await cl.Message(
-        content="👋 **Real Estate Investment Planner Online**. Type your investment parameters to see the multi-agent graph route in real time!"
+        content="👋 **Real Estate AI Investment Planner**. Set your investment parameters (like intended city and max budget) to watch the multi-agent graph route your strategy live!"
     ).send()
     if config.DEBUG_MODE:
         debug_message = f"""
