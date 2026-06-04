@@ -26,6 +26,7 @@ jobs:
         run: uv run pytest
         env:
           PYTHONPATH: .
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
   build-and-push:
     needs: test
