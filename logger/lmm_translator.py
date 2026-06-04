@@ -1,10 +1,10 @@
 import json
 from enum import Enum
 from typing import Any
-
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from config import LLMModelType
 
 class LogType(str, Enum):
     TOOL_START = "tool_start"
@@ -13,15 +13,12 @@ class LogType(str, Enum):
     NODE_SUMMARY = "node_summary"
     GENERAL = "general"
 
-# 1. Define the structural Pydantic contract for the UI output
 class LogSummarySchema(BaseModel):
     ui_string: str = Field(
         description="A concise, sleek, human-readable UI message starting with a contextual emoji. Never use raw JSON syntax."
     )
 
-# 2. Instantiate a dedicated, fast, low-latency compiler model
-# (Using a high-speed, cost-effective model like gpt-4o-mini with structured output enforcement)
-_log_summary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0).with_structured_output(LogSummarySchema)
+_log_summary_llm = ChatOpenAI(model=LLMModelType.FAST_MODEL.value, temperature=0).with_structured_output(LogSummarySchema)
 
 _PROMPTS = {
     LogType.NODE_START: ChatPromptTemplate.from_messages([
@@ -80,16 +77,11 @@ _PROMPTS = {
 }
 
 
-# =====================================================================
-# 🚀 THE UNIFIED GENERATION WORKER
-# =====================================================================
-
 async def compile_ui_log(log_type: LogType, context_name: str, raw_payload: Any) -> str:
     """
     Core engine that handles routing raw logger through structured prompts using type-safe Enums.
     Returns a clean, ready-to-display UI string.
     """
-    # Safeguard against invalid log types falling back safely
     if log_type not in _PROMPTS:
         log_type = LogType.GENERAL
 

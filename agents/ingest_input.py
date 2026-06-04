@@ -1,5 +1,4 @@
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-
 from config import NodeName
 from config.config import MOCK_INGEST_INPUT_AGENT_OUTPUT
 from config.llm import base_model
@@ -19,7 +18,6 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
     if MOCK_INGEST_INPUT_AGENT_OUTPUT:
         return await _get_ingest_mock_response()
 
-    # Step 1: Retrieve the raw human prompt from the input
     user_message_content = state.messages[-1].content
 
     await log_agent_content(
@@ -31,10 +29,8 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
         )
     )
 
-    # Step 2: Bind the extraction schema to your LLM configuration
     structured_llm = base_model.with_structured_output(IngestInputAgentOutput)
 
-    # Step 3: Run the model to perform entity extraction
     extraction_result: IngestInputAgentOutput = structured_llm.invoke([
         SystemMessage(
             content=(
@@ -58,7 +54,6 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
         )
     )
 
-    # Step 4: Construct and return the state update payload nested under the correct state key
     await log_agent_footer(NodeName.INGEST_INPUT_AGENT)
 
     return {
@@ -71,8 +66,6 @@ async def ingest_input_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-
-# --- PRIVATELY SCORED MOCK PROVIDER ---
 async def _get_ingest_mock_response() -> dict:
     """
     Returns a static state-update payload verified by IngestInputAgentOutput,
@@ -80,7 +73,6 @@ async def _get_ingest_mock_response() -> dict:
     """
     await log_agent_content(NodeName.INGEST_INPUT_AGENT, "🔄 [MOCK] Ingest Input Agent: Using mock data")
 
-    # Instantiate the structured output object explicitly
     mock_payload = IngestInputAgentOutput(
         city="Los Angeles, CA",
         budget="$800,000"
@@ -104,7 +96,6 @@ async def _get_ingest_mock_response() -> dict:
         )
     )
 
-    # Return the validated Pydantic object directly under 'ingest_input'
     await log_agent_footer(NodeName.INGEST_INPUT_AGENT)
 
     return {

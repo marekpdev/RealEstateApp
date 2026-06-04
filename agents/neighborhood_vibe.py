@@ -1,7 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
-
 from config import NodeName
 from config.config import MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
 from config.llm import base_model
@@ -11,6 +10,7 @@ from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from logger.callbacks import ToolLoggingCallbackHandler
+
 
 _COMPILED_NEIGHBORHOOD_VIBE_AGENT = None
 
@@ -25,7 +25,6 @@ async def _get_compiled_neighborhood_vibe_agent():
         return _COMPILED_NEIGHBORHOOD_VIBE_AGENT
 
     # Dynamically fetch compliant tool structures from the live MCP gateway.
-    # Access tools hosted on openstreetmap, wikipedia, and free_web_search servers.
     tools_list = await UnifiedMCPGateway.get_tools(
         server_ids = ["wikipedia_service", "openstreetmap_service"],
         disallowed_tool_names=["suggest_meeting_point"] # filter out problematic tools (schema errors etc)
@@ -58,11 +57,9 @@ async def _get_compiled_neighborhood_vibe_agent():
         model=base_model,
         tools=tools_list,
         system_prompt=system_instructions,
-        # The agent handles the validation loop and saves the verified model to 'structured_response'
         response_format=NeighborhoodVibeAgentOutput,
     )
     return _COMPILED_NEIGHBORHOOD_VIBE_AGENT
-
 
 async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     """
@@ -74,12 +71,10 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
     if MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT:
         return await _get_neighborhood_vibe_mock_response()
 
-    # 1. Fetch the globally cached agent harness
     agent = await _get_compiled_neighborhood_vibe_agent()
 
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
-    # 2. Construct a clean starting input state for this agent run.
     agent_input = {
         "messages": [
             HumanMessage(content=f"Analyze local sentiment, lifestyle vibes, and risk factors for neighborhoods inside '{target_city}'.")
@@ -95,7 +90,6 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
         )
     )
 
-    # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
         "callbacks": [ToolLoggingCallbackHandler(NodeName.NEIGHBORHOOD_VIBE_AGENT)],
         "recursion_limit": 10
@@ -108,7 +102,6 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
 
     await log_agent_content(NodeName.NEIGHBORHOOD_VIBE_AGENT, "✅ Structured compilation complete. Updating graph state.")
 
-    # 4. Extract the validated Pydantic object from the standardized output channel
     extraction_result: NeighborhoodVibeAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
@@ -134,7 +127,7 @@ async def neighborhood_vibe_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-# --- PRIVATELY SCORED MOCK PROVIDER ---
+
 async def _get_neighborhood_vibe_mock_response() -> dict:
     """
     Returns a static state-update payload mimicking a successful MCP tool research run,

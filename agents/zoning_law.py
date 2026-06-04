@@ -1,7 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
-
 from config import NodeName
 from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
@@ -12,9 +11,10 @@ from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from logger.callbacks import ToolLoggingCallbackHandler
 
+
 _COMPILED_ZONING_AGENT = None
 
-# Generally it works. We have optimized loops and fetch budget to prevent token overflow.
+
 async def _get_compiled_zoning_agent():
     """
     Lazy-loads and caches the modern unified agent instance to prevent
@@ -24,9 +24,6 @@ async def _get_compiled_zoning_agent():
     if _COMPILED_ZONING_AGENT is not None:
         return _COMPILED_ZONING_AGENT
 
-    # Dynamically fetch compliant tool structures from the live MCP gateway.
-    # We now filter by server ID to allow the agent access to all tools
-    # hosted on the 'brave_search' and 'fetch_service' servers.
     tools_list = await UnifiedMCPGateway.get_tools(
         server_ids=["brave_search", "fetch_service"],
     )
@@ -56,7 +53,6 @@ async def _get_compiled_zoning_agent():
         "4. Finish immediately. Do not loop back for more precision."
     )
 
-    # Instantiate the modern unified agent framework
     for tool in tools_list:
         tool.handle_tool_error = True
 
@@ -64,16 +60,10 @@ async def _get_compiled_zoning_agent():
         model=base_model,
         tools=tools_list,
         system_prompt=system_instructions,
-        # 🎯 The agent natively handles the validation loop on exit and saves
-        # the verified Pydantic model directly into the 'structured_response' key.
         response_format=ZoningLawAgentOutput,
     )
     return _COMPILED_ZONING_AGENT
 
-
-# =====================================================================
-# 2. RUNTIME GRAPH NODE LAYER
-# =====================================================================
 
 async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     """
@@ -82,18 +72,13 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
     """
     await log_agent_header(NodeName.ZONING_LAW_AGENT, "⚙️ Node: Zoning Law Agent")
 
-    # Handle Mock Execution
     if MOCK_ZONING_LAW_AGENT_OUTPUT:
         return await _get_zoning_law_mock_response()
 
-    # 1. Fetch the globally cached agent harness
     agent = await _get_compiled_zoning_agent()
 
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
 
-    # 2. Construct a clean starting input state for this agent run.
-    # We pass the target city as the primary task; the cached agent 
-    # handles the behavioral constraints via its internal system instructions.
     agent_input = {
         "messages": [
             HumanMessage(content=f"Research multi-family zoning in: {target_city}")
@@ -109,7 +94,6 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
         )
     )
 
-    # 3. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
         "callbacks": [ToolLoggingCallbackHandler(NodeName.ZONING_LAW_AGENT)],
         "recursion_limit": 10
@@ -122,7 +106,6 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
 
     await log_agent_content(NodeName.ZONING_LAW_AGENT, "✅ Structured compilation complete. Updating graph state.")
 
-    # 4. Extract the validated Pydantic object from the standardized output channel
     extraction_result: ZoningLawAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
@@ -140,7 +123,6 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
 
     return {
         "zoning_laws": extraction_result,
-        # Append node status updates to your parent graph state trace
         "messages": [
             AIMessage(
                 content="Zoning Law Agent: Completed live municipal registry scanning and structured regulatory parsing.",
@@ -149,9 +131,6 @@ async def zoning_law_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-# =====================================================================
-# 3. PRIVATELY SCORED MOCK PROVIDER
-# =====================================================================
 
 async def _get_zoning_law_mock_response() -> dict:
     """

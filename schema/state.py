@@ -2,7 +2,6 @@ from typing import Annotated, List, Optional
 from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
-
 from schema.market_data import MarketDataAgentOutput
 
 class IngestInputAgentOutput(BaseModel):

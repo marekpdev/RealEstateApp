@@ -1,7 +1,6 @@
 import httpx
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-import chainlit as cl
 from chainlit.utils import mount_chainlit
 
 from services.market_data_gateway import RapidRealEstateMarketClient

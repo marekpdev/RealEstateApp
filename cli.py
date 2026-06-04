@@ -6,10 +6,11 @@ async def run_cli_pipeline():
     print("🚀 Starting App in CLI Mode...")
 
     """Asynchronous orchestrator for terminal-based LangGraph testing."""
-    # query = input("Ask the Agent: ")
-    query = "I would like to invest in Los Angeles, CA, and my max budget is $800,000"
+    query = input("Ask the Agent: ")
 
-    # Inputs mapped to your global LangGraph schema shape
+    # Query for testing only
+    # query = "I would like to invest in Los Angeles, CA, and my max budget is $800,000"
+
     inputs = {"messages": [HumanMessage(content=query)]}
     config = {"recursion_limit": 20}
 

@@ -1,7 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
-
 from config import NodeName
 from config.config import MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
 from config.llm import base_model
@@ -11,6 +10,7 @@ from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, render_financial_report, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
 from logger.callbacks import ToolLoggingCallbackHandler
+
 
 _COMPILED_FINANCIAL_MODELER_AGENT = None
 
@@ -42,8 +42,6 @@ async def _get_compiled_financial_modeler_agent():
         model=base_model,
         tools=[repl_tool],
         system_prompt=system_instructions,
-        # The agent natively handles the validation loop on exit and saves 
-        # the verified Pydantic model directly into the 'structured_response' key.
         response_format=FinancialModelerAgentOutput,
     )
     return _COMPILED_FINANCIAL_MODELER_AGENT
@@ -59,10 +57,8 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
     if MOCK_FINANCIAL_MODELER_AGENT_OUTPUT:
         return await _get_financial_modeler_mock_response()
 
-    # 1. Fetch the globally cached agent harness
     agent = await _get_compiled_financial_modeler_agent()
 
-    # 2. Safely unfold variables from the nested Pydantic state modules
     target_city = state.ingest_input.city if state.ingest_input else "Unknown Market"
     market_str = str(state.market_data) if state.market_data else "No market listing data available."
     vibe_str = state.neighborhood_vibe.neighborhood_vibe if state.neighborhood_vibe else "No neighborhood sentiment context available."
@@ -75,7 +71,6 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
         f"### ZONING LAWS:\n{zoning_str}\n"
     )
 
-    # 3. Construct a clean starting input state for this agent run.
     agent_input = {
         "messages": [
             HumanMessage(content=user_message)
@@ -91,7 +86,6 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
         )
     )
 
-    # 4. Invoke the worker agent with our starting context package
     agent_config: RunnableConfig = {
         "callbacks": [ToolLoggingCallbackHandler(NodeName.FINANCIAL_MODELER_AGENT)],
         "recursion_limit": 10
@@ -104,7 +98,6 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
 
     await log_agent_content(NodeName.FINANCIAL_MODELER_AGENT, "✅ Structured report generation complete. Updating graph state.")
 
-    # 5. Extract the validated Pydantic object from the standardized output channel
     extraction_result: FinancialModelerAgentOutput = agent_output["structured_response"]
 
     print_model(extraction_result)
@@ -132,7 +125,7 @@ async def financial_modeler_agent_node(state: OverallGraphState) -> dict:
         ]
     }
 
-# --- PRIVATELY SCORED MOCK PROVIDER ---
+
 async def _get_financial_modeler_mock_response() -> dict:
     """
     Returns a static state-update payload mimicking a successful multi-source synthesis analysis,

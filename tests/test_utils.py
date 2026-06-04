@@ -1,5 +1,4 @@
 import os
-import pytest
 from pydantic import BaseModel
 from utils.utils import get_env_bool, load_mock_fixture, print_model
 
@@ -44,7 +43,6 @@ def test_load_mock_fixture(tmp_path, monkeypatch):
         pass
 
     # Actually, it's easier to just use the real fixtures if possible, or mock the Path properly.
-    # But wait, I can just create the file in the real path if I'm allowed, or mock Path.
     
     from pathlib import Path
     original_exists = Path.exists
