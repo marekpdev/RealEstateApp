@@ -139,7 +139,7 @@ The application provides a comprehensive mocking suite for local development and
 
 ---
 
-## 🔮 Further Improvements
+## 🔮 Future Roadmap
 
 *   **Semantic Caching:** Implementation of a vector-based cache for common market queries to further reduce API spend.
 *   **Infrastructure as Code (IaC):** Implement **Terraform** for reproducible Azure environment setup.
