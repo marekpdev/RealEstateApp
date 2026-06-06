@@ -1,4 +1,4 @@
-# 🏢 AI Real Estate Investment Planner
+# 🏢 Real Estate AI Investment Planner
 
 Welcome! This system is an advanced multi-agent orchestrator built with **LangGraph** and powered by structured LLM parsing. It is designed to evaluate real estate deals by combining disparate data layers in parallel.
 
