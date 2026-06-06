@@ -1,38 +1,34 @@
 # Real Estate AI Investment Planner
 
-The **Real Estate AI Investment Planner** is a state-of-the-art multi-agent platform designed to automate complex real estate investment analysis. By leveraging **LangGraph** and **LangChain** for graph-based orchestration, the application coordinates specialized AI agents that perform parallel research across market data, neighborhood sentiment, and municipal zoning laws to generate a professional-grade financial prospectus.
+The **Real Estate AI Investment Planner** is a **Python**-based multi-agent platform that automates real estate investment analysis to deliver professional investment reports. Built on **LangGraph** and **LangChain** for multi-agent coordination, the system leverages **OpenAI LLMs** for advanced reasoning across specialized agents performing parallel market research, sentiment analysis, and financial modeling. The backend integrates **FastAPI** endpoints, the **Model Context Protocol (MCP)** for dynamic tool discovery, and a **RAG pipeline** utilizing a **Pinecone vector database** and **Azure Blob Storage**. Containerized with **Docker** and deployed on **Microsoft Azure Container Apps**, this platform efficiently transforms raw market data into actionable investment insights.
 
-Built with a focus on scalability and deterministic accuracy, the system integrates the **Model Context Protocol (MCP)** for dynamic tool discovery and a sandboxed **Python REPL** for error-free financial underwriting. The entire experience is delivered through a real-time **Chainlit** interactive dashboard, providing transparency into the agents' collaborative reasoning process.
+**Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
 
 ---
 
 ## 🚀 Key Features & Tech Stack
 
 ### 🧠 Advanced Multi-Agent Orchestration
-*   **Parallel Research Flow:** High-efficiency architecture where researcher nodes (Market, Vibe, and Zoning) execute concurrently using **LangGraph**, significantly reducing total analysis time.
-*   **Stateful Workflow Management:** Uses a global state model to pass structured context between agents, ensuring coherent synthesis of disparate data points.
-*   **Reliability Guardrails:** Implements a strict `recursion_limit` for each node to prevent infinite agentic loops and ensure system stability.
+*   **Parallel Graph Execution:** High-concurrency architecture where researcher nodes (Market, Vibe, and Zoning) execute in parallel using **LangGraph**'s state-machine orchestration, , significantly reducing total analysis time.
+*   **Stateful Workflow Management:** Uses **Pydantic models** to manage the state and pass structured context between agents, ensuring data consistency across the graph.
+*   **MCP Integration & Dynamic Tooling:** Employs the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia) via standardized adapters. Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY`
 
 ### 📚 RAG Pipeline (Retrieval-Augmented Generation)
 *   **Hybrid Knowledge Base:** Combines live web search with a specialized **Pinecone** vector database containing verified municipal documents.
-*   **Cloud-Native ETL:** Documents are stored in **Azure Blob Storage** and synchronized to Pinecone via a custom ETL pipeline. While documents are added to Azure via a private account, they are synced using the command `uv run python scripts/sync_knowledge_base.py`.
-*   **Automated Processing:** The `sync_azure_to_pinecone` function handles the end-to-end RAG lifecycle: connecting to Azure, PDF parsing (**pypdf**), semantic chunking (**RecursiveCharacterTextSplitter** with chunk size 1000 and overlap 100), and high-performance embedding generation (**OpenAI text-embedding-3-small**) before pushing to the vector database.
-*   **Expert Prompting:** The Zoning Law agent uses optimized system instructions to prioritize these verified records over web fallbacks, ensuring data integrity while maintaining a strict "search budget" for performance.
+*   **Cloud-Native Storage:** Documents are stored in **Azure Blob Storage** and synchronized to Pinecone via a custom ETL pipeline.
+*   **Automated Document Processing:** End-to-end RAG lifecycle including PDF parsing (**pypdf**), semantic chunking (**RecursiveCharacterTextSplitter**), and high-performance embedding generation (**OpenAI text-embedding-3-small**).
+*   **Expert Prompting:** The Zoning Law agent leverages optimized system instructions to prioritize RAG records over web fallbacks, maintaining a strict "search budget" for performance.
 
-### 🛠️ Dynamic Tooling & MCP Integration
-*   **Standardized Extensibility:** Uses the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia).
-*   **Easy Expansion:** Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY` in `tools.py`.
-*   **Deterministic Underwriting:** The Financial Modeler agent uses a sandboxed **Python REPL** to calculate Cap Rates, NOI, and Cash-on-Cash returns with 100% mathematical precision.
-
-### 💎 Premium User Experience
-*   **Human-Readable Logging:** Features the `@lmm_translator` agent, which converts raw technical logs and JSON payloads into sleek, emoji-enhanced UI messages in real-time.
-*   **Customized Interface:** A tailored **Chainlit** UI with custom CSS (`style.css`) and a dark-themed `theme.json` for a professional, investor-centric look.
-*   **Action Tracking:** Every tool usage and node action is populated in the UI side-panel, providing a clear "audit trail" of the AI's research.
+### 💎 Premium User Experience (Chainlit)
+*   **Real-time UX Translation:** Employs a specialized `@llm_translator` agent that intercepts raw technical logs and JSON payloads, converting them into concise, emoji-enhanced progress updates for the end-user.
+*   **Interactive Interface:** Custom-styled **Chainlit** dashboard with dedicated CSS and theme configurations for a professional investor experience.
+*   **Action Tracking:** Every tool usage and node action is streamed directly to the main UI chat window, providing a transparent "audit trail" of the AI's reasoning process.
 
 ### 🛡️ Robust Engineering
-*   **Type-Safe Contracts:** Utilizes **Pydantic** for structured output and state management. Field descriptions (e.g., `zpid` for property IDs) are used to improve LLM extraction accuracy and provide clear API documentation.
-*   **Token Economy:** Implements custom optimizations in `tools.py` to sanitize schemas and inject restrictive defaults (lower search counts/fetch lengths), minimizing token consumption and API costs.
-*   **Modular Architecture:** Uses a `BaseAPIClient` structure, making it trivial to plug in new data providers like Zillow, Redfin, or proprietary real estate APIs.
+*   **Type-Safe Contracts:** Utilizes **Pydantic** for structured output and state management, separated into per-agent models in `state.py` for maximum clarity and maintainability.
+*   **Reliability Guardrails:** Implements a strict `recursion_limit` for graph execution to prevent infinite agentic loops and ensure system stability.
+*   **Token Optimization:** Custom logic in `tools.py` sanitizes tool schemas and injects restrictive defaults to minimize token consumption and API costs.
+*   **Deterministic Underwriting:** The Financial Modeler agent uses a sandboxed **Python REPL** to calculate Cap Rates, NOI, and Cash-on-Cash returns with 100% mathematical precision.
 
 ---
 
@@ -40,12 +36,12 @@ Built with a focus on scalability and deterministic accuracy, the system integra
 
 The complete graph topology and node definitions are maintained in `graph.py`.
 
-1.  **Ingest Agent:** Parses raw user prompts into structured criteria (City, Budget, Strategy).
-2.  **Supervisor Agent:** Orchestrates the research phase, routing the workflow based on the extracted intent.
-3.  **Market Data Agent:** Retrieves live listings and pricing telemetry via **RapidAPI**.
-4.  **Neighborhood Vibe Agent:** Analyzes community sentiment and transit connectivity using **OpenStreetMap** and **Wikipedia**.
-5.  **Zoning Law Agent:** Queries the **RAG** database and web for land-use restrictions and Short-Term Rental (STR) regulations.
-6.  **Financial Modeler Agent:** The "Synthesizer" that executes code-based financial modeling and generates the final markdown prospectus.
+1.  **Ingest Agent:** Uses Pydantic for schema-strict extraction of user criteria (City, Budget, Strategy) from natural language.
+2.  **Supervisor Agent:** Implements a router-logic to orchestrate the research phase and fan-out tasks to worker nodes.
+3.  **Market Data Agent:** Retrieves live listings and pricing telemetry via asynchronous **RapidAPI** calls.
+4.  **Neighborhood Vibe Agent:** Analyzes community sentiment and connectivity using **OpenStreetMap** and **Wikipedia** via MCP.
+5.  **Zoning Law Agent:** Executes a RAG workflow to query **Pinecone** for land-use restrictions and STR regulations.
+6.  **Financial Modeler Agent:** A high-fidelity "Synthesizer" that executes code-based modeling via **Python REPL** to generate the final prospectus.
 
 ---
 
@@ -53,7 +49,7 @@ The complete graph topology and node definitions are maintained in `graph.py`.
 
 ### Prerequisites
 *   Python 3.12+ (managed via **uv**)
-*   Docker & Docker Compose (optional)
+*   Docker & Docker Compose
 
 ### Configuration
 Create a `.env` file in the root directory with the following variables:
@@ -82,11 +78,18 @@ MOCK_MARKET_DATA_API=False
 DEBUG_MODE=False
 ```
 
-### Option 1: Running via CLI (Recommended for Development)
-```bash
-# Sync Knowledge Base (RAG)
-uv run python scripts/sync_knowledge_base.py
+### Sync Knowledge Base (RAG)
 
+Required only when updating documents
+
+```bash
+uv run python scripts/sync_knowledge_base.py
+```
+
+### Option 1: Running via CLI (Recommended for Development)
+
+#### Run Application
+```bash
 # Run Web Interface
 uv run chainlit run app.py -w
 
@@ -107,25 +110,40 @@ docker run -p 8080:8080 --env-file .env realestateapp:local
 
 ---
 
-## 🚢 Deployment & CI/CD
+## 🧪 Testing & Mocking
 
-*   **Cloud Infrastructure:** Fully deployed on **Microsoft Azure** using **Azure Container Apps**.
-*   **CI/CD Pipeline:** GitHub Actions (`deploy.yml`) automatically triggers on push, running unit tests and deploying fresh Docker images to **GitHub Packages** for seamless revision management.
-*   **Custom Domain:** Accessible via [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/).
+The application provides a comprehensive mocking suite for local development and CI testing to reduce API spend:
+*   **Agent Mocks:** Each agent can be toggled to return pre-configured responses using environment variables:
+    *   `MOCK_INGEST_INPUT_AGENT_OUTPUT`
+    *   `MOCK_MARKET_DATA_AGENT_OUTPUT`
+    *   `MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT`
+    *   `MOCK_ZONING_LAW_AGENT_OUTPUT`
+    *   `MOCK_FINANCIAL_MODELER_AGENT_OUTPUT`
+*   **API Mocks:** `MOCK_MARKET_DATA_API` allows testing market logic without consuming RapidAPI credits.
 
 ---
 
 ## 📈 Optimization Strategies
 
-*   **Prompt Engineering:** Agents are primed with efficiency-first instructions (e.g., "Good enough" criteria for zoning research) to minimize LLM latency and tool usage.
-*   **Cost Efficiency:** Schema sanitization removes redundant JSON metadata before sending to OpenAI.
-*   **Smart Fallbacks:** The Zoning agent is instructed to prioritize local RAG data before falling back to expensive web searches.
+### 🎯 Advanced Prompt Engineering
+*   **Dynamic "Good Enough" Criteria:** Agents are primed with efficiency-first instructions to minimize LLM latency by stopping research once core criteria are met.
+*   **Few-Shot Prospectus Generation:** The Financial Modeler uses curated examples to ensure consistent, professional-grade markdown formatting.
+*   **System Message Specialization:** Each agent role is defined by a highly focused system prompt that restricts its scope to its specific domain, reducing hallucination.
+
+### 💰 Cost Optimization Techniques
+*   **Model Tiering:** Leveraging different model tiers (e.g., GPT-4o-mini for routing/extraction and GPT-4o for final synthesis) to balance quality and cost.
+*   **Schema Sanitization:** Custom logic removes redundant JSON metadata from tool definitions before sending to the LLM.
+*   **Context Pruning:** Automatic truncation of massive tool outputs (e.g., web fetch results) to the most relevant 2000-4000 characters.
+*   **RAG Priority:** The Zoning agent is strictly instructed to prioritize local RAG data from Pinecone before falling back to expensive web searches.
+*   **Restrictive Tool Defaults:** Hard-coded limits on search results (e.g., max 3 results) and fetch lengths to prevent token-heavy data dumps.
 
 ---
 
 ## 🔮 Further Improvements
 
+*   **Semantic Caching:** Implementation of a vector-based cache for common market queries to further reduce API spend.
 *   **Infrastructure as Code (IaC):** Implement **Terraform** for reproducible Azure environment setup.
 *   **Orchestration:** Migration to **Kubernetes** (AKS) for enterprise-scale auto-scaling.
 *   **Observability:** Integration of **LangSmith** or **Arize Phoenix** for deeper trace analysis and evaluation.
-*   **Cost Optimization:** Implementation of semantic caching for common market queries to further reduce API spend.
+*   **Agentic Self-Correction:** Implementing a "Critique" loop where the Supervisor validates agent outputs against the initial user request.
+*   **Multi-Model Fallbacks:** Automatically switching to alternative providers (e.g., Anthropic or local models) in case of API outages or rate limits.
