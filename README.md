@@ -9,9 +9,9 @@ The **Real Estate AI Investment Planner** is a **Python**-based multi-agent plat
 ## 🚀 Key Features & Tech Stack
 
 ### 🧠 Advanced Multi-Agent Orchestration
-*   **Parallel Graph Execution:** High-concurrency architecture where researcher nodes (Market, Vibe, and Zoning) execute in parallel using **LangGraph**'s state-machine orchestration, , significantly reducing total analysis time.
+*   **Parallel Graph Execution:** High-concurrency architecture where researcher nodes (Market, Vibe, and Zoning) execute in parallel using **LangGraph**'s state-machine orchestration, significantly reducing total analysis time.
 *   **Stateful Workflow Management:** Uses **Pydantic models** to manage the state and pass structured context between agents, ensuring data consistency across the graph.
-*   **MCP Integration & Dynamic Tooling:** Employs the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia) via standardized adapters. Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY`
+*   **MCP Integration & Dynamic Tooling:** Employs the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia) via standardized adapters. Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY`.
 
 ### 📚 RAG Pipeline (Retrieval-Augmented Generation)
 *   **Hybrid Knowledge Base:** Combines live web search with a specialized **Pinecone** vector database containing verified municipal documents.
@@ -37,7 +37,7 @@ The **Real Estate AI Investment Planner** is a **Python**-based multi-agent plat
 The complete graph topology and node definitions are maintained in `graph.py`.
 
 1.  **Ingest Agent:** Uses Pydantic for schema-strict extraction of user criteria (City, Budget, Strategy) from natural language.
-2.  **Supervisor Agent:** Implements a router-logic to orchestrate the research phase and fan-out tasks to worker nodes.
+2.  **Supervisor Agent:** Implements router logic to orchestrate the research phase and fan-out tasks to worker nodes.
 3.  **Market Data Agent:** Retrieves live listings and pricing telemetry via asynchronous **RapidAPI** calls.
 4.  **Neighborhood Vibe Agent:** Analyzes community sentiment and connectivity using **OpenStreetMap** and **Wikipedia** via MCP.
 5.  **Zoning Law Agent:** Executes a RAG workflow to query **Pinecone** for land-use restrictions and STR regulations.
@@ -80,7 +80,7 @@ DEBUG_MODE=False
 
 ### Sync Knowledge Base (RAG)
 
-Required only when updating documents
+Required only when updating documents.
 
 ```bash
 uv run python scripts/sync_knowledge_base.py
@@ -106,7 +106,7 @@ docker-compose up --build
 docker build -t realestateapp:local .
 docker run -p 8080:8080 --env-file .env realestateapp:local
 ```
-*Access the app at `http://localhost:8080/`*
+*Access the app at `http://localhost:8080/`.*
 
 ---
 
@@ -128,7 +128,7 @@ The application provides a comprehensive mocking suite for local development and
 ### 🎯 Advanced Prompt Engineering
 *   **Dynamic "Good Enough" Criteria:** Agents are primed with efficiency-first instructions to minimize LLM latency by stopping research once core criteria are met.
 *   **Few-Shot Prospectus Generation:** The Financial Modeler uses curated examples to ensure consistent, professional-grade markdown formatting.
-*   **System Message Specialization:** Each agent role is defined by a highly focused system prompt that restricts its scope to its specific domain, reducing hallucination.
+*   **System Message Specialization:** Each agent role is defined by a highly focused system prompt that restricts its scope to its specific domain, reducing hallucinations.
 
 ### 💰 Cost Optimization Techniques
 *   **Model Tiering:** Leveraging different model tiers (e.g., GPT-4o-mini for routing/extraction and GPT-4o for final synthesis) to balance quality and cost.
