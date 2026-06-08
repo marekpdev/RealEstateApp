@@ -4,6 +4,10 @@ The **Real Estate AI Investment Planner** is a **Python**-based multi-agent plat
 
 **Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
 
+<video src="https://realestateappstorage.blob.core.windows.net/demovideo/RealEstateAppDemo-v1.mp4" controls width="100%">
+  Your browser does not support the video tag.
+</video>
+
 ---
 
 ## 🚀 Key Features & Tech Stack
