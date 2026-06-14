@@ -1,12 +1,11 @@
-resource "azurerm_resource_group" "rg" {
-  name     = "rg-realestateapp"
-  location = "swedencentral" # High capacity region to bypass trial quotas
+data "azurerm_resource_group" "rg" {
+  name = "rg-realestateapp"
 }
 
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "RealEstateAppAKSCluster"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = "swedencentral"
+  resource_group_name = data.azurerm_resource_group.rg.name
   dns_prefix          = "realestateapp-k8s"
 
   # System Node Pool Configuration (Locked down to 1 cheap node)
