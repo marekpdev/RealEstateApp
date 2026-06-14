@@ -5,7 +5,7 @@ metadata:
   labels:
     app: realestateapp
 spec:
-  replicas: 2                     # Run 2 replicas for high-concurrency graph runs
+  replicas: 2
   selector:
     matchLabels:
       app: realestateapp
@@ -18,7 +18,7 @@ spec:
         - name: github-registry-secret
       containers:
       - name: realestateapp-container
-        image: ghcr.io/marekpdev/realestateapp:pr-18 # change to 'lastest' later on
+        image: ghcr.io/marekpdev/realestateapp:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

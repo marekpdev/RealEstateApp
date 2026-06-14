@@ -6,6 +6,7 @@ metadata:
     app: realestateapp
 spec:
   type: LoadBalancer
+  sessionAffinity: ClientIP
   ports:
   - port: 80
     targetPort: 8080
