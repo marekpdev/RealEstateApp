@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: realestateapp-deployment
+  labels:
+    app: realestateapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: realestateapp
+  template:
+    metadata:
+      labels:
+        app: realestateapp
+    spec:
+      imagePullSecrets:
+        - name: github-registry-secret
+      containers:
+      - name: realestateapp-container
+        image: ghcr.io/marekpdev/realestateapp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: "500m"
+            memory: 512Mi
+
+        env:
+        # ==========================================
+        # ⚙️ 1. NON-SENSITIVE CONFIGURATIONS (Plain Text)
+        # ==========================================
+        - name: DEBUG_MODE
+          value: "False"
+        - name: PINECONE_INDEX_NAME
+          value: "real-estate-app"
+
+        # Application testing toggles
+        - name: MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
+          value: "False"
+        - name: MOCK_INGEST_INPUT_AGENT_OUTPUT
+          value: "False"
+        - name: MOCK_MARKET_DATA_AGENT_OUTPUT
+          value: "False"
+        - name: MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
+          value: "False"
+        - name: MOCK_ZONING_LAW_AGENT_OUTPUT
+          value: "False"
+        - name: MOCK_MARKET_DATA_API
+          value: "False"
+
+        # ==========================================
+        # 🔒 2. SENSITIVE APPLICATION SECRETS (Pointers)
+        # ==========================================
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: OPENAI_API_KEY
+        - name: GH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: GH_TOKEN
+        - name: RAPIDAPI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: RAPIDAPI_KEY
+        - name: BRAVE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: BRAVE_API_KEY
+        - name: PINECONE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: PINECONE_API_KEY
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: AZURE_STORAGE_CONNECTION_STRING
