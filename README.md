@@ -1,6 +1,16 @@
 # Real Estate AI Investment Planner
 
-The **Real Estate AI Investment Planner** is a **Python**-based multi-agent platform that automates real estate investment analysis to deliver professional investment reports. Built on **LangGraph** and **LangChain** for multi-agent coordination, the system leverages **OpenAI LLMs** for advanced reasoning across specialized agents performing parallel market research, sentiment analysis, and financial modeling. The backend integrates **FastAPI** endpoints, the **Model Context Protocol (MCP)** for dynamic tool discovery, and a **RAG pipeline** utilizing a **Pinecone vector database** and **Azure Blob Storage**. Containerized with **Docker**, version-controlled in the **GitHub Container Registry (GHCR)**, provisioned via **Terraform (Infrastructure as Code)**, and orchestrated at enterprise-scale on an **Azure Kubernetes Service (AKS)** cluster, this platform efficiently transforms raw market data into actionable investment insights.
+The **Real Estate AI Investment Planner** is a Python-based multi-agent platform that automates complex real estate analysis, transforming raw market variables into comprehensive, investor-grade underwriting reports.
+
+### ⚡ Tech Stack At-a-Glance
+
+| Layer                   | Technologies Used                               | Purpose / Role |
+|:------------------------|:------------------------------------------------| :--- |
+| **Multi-Agent AI**      | `LangGraph`, `LangChain`, `OpenAI LLMs`         | Manages parallel researcher nodes, state state-machines, and core reasoning. |
+| **API & Protocols**     | `FastAPI`, `Model Context Protocol (MCP)`       | Exposes application endpoints and handles dynamic tool discovery adapters. |
+| **Data & RAG Pipeline** | `Pinecone`, `Azure Blob Storage`                | Hybrid vector/cloud knowledge base for municipal documents and zoning codes. |
+| **Infrastructure**      | `Docker`, `Terraform (IaC)`, `AKS (Kubernetes)` | Handles multi-environment reproducibility, containerization, and cloud orchestration. |
+| **CI/CD & UX**          | `GHCR`, `Chainlit`                              | Automated version-controlled container hosting and premium streaming investor dashboard. |
 
 **Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
 
