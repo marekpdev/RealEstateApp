@@ -31,6 +31,16 @@ kubectl config use-context RealEstateAppAKSCluster
 
 The live Microsoft Azure environment grid is managed declaratively inside the `terraform/` directory via explicit backend structural signatures (`main.tf`, `provider.tf`).
 
+#### ⚠️ Important Architecture Note on Resource Groups
+Within `main.tf` file, the infrastructure references an existing resource group using a read-only data block
+```terraform
+data "azurerm_resource_group" "rg" {
+  name = "rg-realestateapp"
+}
+```
+
+**Why it works this way:** The resource group `rg-realestateapp` must be created manually prior to running Terraform. This design ensures strict decoupling: when you execute a teardown, Terraform destroys only the AKS cluster and its dependent networks, leaving the base resource group completely untouched. This protects persistent data assets belonging specifically to the Real Estate App ecosystem—such as the persistent Azure Blob Storage account hosting your municipal RAG documents—from being accidentally deleted during infrastructure teardowns.
+
 ```powershell
 # Move into the dedicated infrastructure management directory
 cd terraform
@@ -53,6 +63,10 @@ Once Terraform completes the infrastructure rollout, link your authenticated com
 # Log into your secure personal Microsoft Azure subscription account
 az login
 
+# TROUBLESHOOTING TIP: If you face subscription or login errors, bypass global discovery 
+# and authenticate directly into your organization partition using your specific Tenant ID:
+az login --tenant your-tenant-id-here
+
 # Pull down the remote cluster security tokens and merge them directly into your local configuration ledger
 az aks get-credentials --resource-group rg-realestateapp --name RealEstateAppAKSCluster
 ```
@@ -65,11 +79,19 @@ To maintain enterprise-grade security governance, application-layer dependencies
 # Return back up into your main repository root workspace folder
 cd ..
 
+# EXTRA PRECAUTION: If you need to clear old keys or completely recreate your credentials,
+# cleanly wipe the existing cluster secret cache without triggering a target error crash:
+kubectl delete secret realestateapp-secrets --ignore-not-found
+
 # Package and securely inject your local environment variable stack straight into the cluster memory
 kubectl create secret generic realestateapp-secrets --from-env-file=.env
 
 # Verify that the secure configuration secret bucket was created successfully inside the namespace
 kubectl get secret realestateapp-secrets
+
+# AUDIT & DEBUG SECRETS: View base64-encoded structural representations of keys loaded inside your 
+# active deployment namespace memory to verify all fields mapped correctly:
+kubectl get secret realestateapp-secrets -o jsonpath='{.data}'
 
 # Apply the declarative layout manifests to construct your Pod allocations and LoadBalancer networks
 kubectl apply -f k8s/
