@@ -64,3 +64,14 @@ logs/
 !.chainlit/translations/en-US.json
 
 .junie/
+
+# Ignore local Terraform working directories
+.terraform/
+
+# Ignore Terraform state history records (CRITICAL FOR SECURITY)
+*.tfstate
+*.tfstate.backup
+
+# Ignore local variable configuration files
+*.tfvars
+*.tfvars.json

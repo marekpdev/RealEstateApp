@@ -49,3 +49,7 @@ Dockerfile
 !.chainlit/translations/
 .chainlit/translations/*
 !.chainlit/translations/en-US.json
+
+# Ignore the entire infrastructure directory during container builds
+terraform/
+k8s/

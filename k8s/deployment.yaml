@@ -14,8 +14,6 @@ spec:
       labels:
         app: realestateapp
     spec:
-      imagePullSecrets:
-        - name: github-registry-secret
       containers:
       - name: realestateapp-container
         image: ghcr.io/marekpdev/realestateapp:latest

@@ -1,6 +1,17 @@
 # Real Estate AI Investment Planner
 
-The **Real Estate AI Investment Planner** is a **Python**-based multi-agent platform that automates real estate investment analysis to deliver professional investment reports. Built on **LangGraph** and **LangChain** for multi-agent coordination, the system leverages **OpenAI LLMs** for advanced reasoning across specialized agents performing parallel market research, sentiment analysis, and financial modeling. The backend integrates **FastAPI** endpoints, the **Model Context Protocol (MCP)** for dynamic tool discovery, and a **RAG pipeline** utilizing a **Pinecone vector database** and **Azure Blob Storage**. Containerized with **Docker** and deployed on **Microsoft Azure Container Apps**, this platform efficiently transforms raw market data into actionable investment insights.
+The **Real Estate AI Investment Planner** is a Python-based multi-agent platform that automates complex real estate analysis, transforming raw market variables into comprehensive, investor-grade underwriting reports.
+
+### ⚡ Tech Stack At-a-Glance
+
+| Layer                   | Technologies Used                                                    | Purpose / Role                                                                        |
+|:------------------------|:---------------------------------------------------------------------|:--------------------------------------------------------------------------------------|
+| **Multi-Agent AI**      | **LangGraph**, **LangChain**, **OpenAI LLMs**                        | Manages parallel researcher nodes, state state-machines, and core reasoning.          |
+| **API & Protocols**     | **FastAPI**, **Model Context Protocol (MCP)**                        | Exposes application endpoints and handles dynamic tool discovery adapters.            |
+| **Data & RAG Pipeline** | **Pinecone**, **Azure Blob Storage**                                 | Hybrid vector/cloud knowledge base for municipal documents and zoning codes.          |
+| **Infrastructure**      | **Docker**, **Terraform (IaC)**, **AKS (Kubernetes)**                | Handles multi-environment reproducibility, containerization, and cloud orchestration. |
+| **CI/CD**               | **GHCR**                                                             | Automated version-controlled container hosting.                                       |
+| **UX/UI**               | **Chainlit**                                                         | Interactive Chainlit UI featuring real-time, streamed agent reasoning updates.        |
 
 **Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
 
@@ -16,6 +27,12 @@ The **Real Estate AI Investment Planner** is a **Python**-based multi-agent plat
 *   **Parallel Graph Execution:** High-concurrency architecture where researcher nodes (Market, Vibe, and Zoning) execute in parallel using **LangGraph**'s state-machine orchestration, significantly reducing total analysis time.
 *   **Stateful Workflow Management:** Uses **Pydantic models** to manage the state and pass structured context between agents, ensuring data consistency across the graph.
 *   **MCP Integration & Dynamic Tooling:** Employs the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia) via standardized adapters. Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY`.
+
+### 🛡️ Enterprise Cloud Architecture & DevOps (IaC)
+*   **Infrastructure as Code (IaC):** 100% reproducible, declarative system architecture defined using **Terraform** to provision remote cloud infrastructure configurations dynamically.
+*   **Kubernetes Orchestration (AKS):** High-availability scaling and state management using **Azure Kubernetes Service**, routing incoming user traffic dynamically via cloud LoadBalancers using declarative manifest files.
+*   **Secure Infrastructure Governance:** Adheres to enterprise security standards by enforcing a "Hybrid DevOps Setup"—utilizing strict git-tracking protocols for provider lock files while securely shielding state files and unencrypted access records.
+*   **Decoupled Secret Pipeline:** Runtime API variables are injected via secure native Kubernetes generic secrets, keeping production credentials safely separated from repository tracking ledgers.
 
 ### 📚 RAG Pipeline (Retrieval-Augmented Generation)
 *   **Hybrid Knowledge Base:** Combines live web search with a specialized **Pinecone** vector database containing verified municipal documents.
@@ -49,7 +66,7 @@ The complete graph topology and node definitions are maintained in `graph.py`.
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ Local Installation & Setup
 
 ### Prerequisites
 *   Python 3.12+ (managed via **uv**)
@@ -114,6 +131,14 @@ docker run -p 8080:8080 --env-file .env realestateapp:local
 
 ---
 
+## 🌐 Production Cloud Deployment & DevOps
+
+The production infrastructure of this platform is engineered as reproducible, enterprise-ready cloud blueprints using Terraform and Kubernetes (AKS).
+
+To ensure clean documentation architecture, all step-by-step terminal execution routines, context switching flags, resource hibernation sequences, and cluster troubleshooting commands have been isolated into a dedicated manual.
+
+👉 Ready to deploy live to Microsoft Azure? Follow the comprehensive, step-by-step instructions in the [Production Cloud Deployment Guide](DEPLOYMENT.md).
+
 ## 🧪 Testing & Mocking
 
 The application provides a comprehensive mocking suite for local development and CI testing to reduce API spend:
@@ -146,8 +171,6 @@ The application provides a comprehensive mocking suite for local development and
 ## 🔮 Future Roadmap
 
 *   **Semantic Caching:** Implementation of a vector-based cache for common market queries to further reduce API spend.
-*   **Infrastructure as Code (IaC):** Implement **Terraform** for reproducible Azure environment setup.
-*   **Orchestration:** Migration to **Kubernetes** (AKS) for enterprise-scale auto-scaling.
-*   **Observability:** Integration of **LangSmith** or **Arize Phoenix** for deeper trace analysis and evaluation.
+*   **Observability:** Integration of **LangSmith** or **Arize Phoenix** for deeper multi-agent trace analysis, execution monitoring and evaluation.
 *   **Agentic Self-Correction:** Implementing a "Critique" loop where the Supervisor validates agent outputs against the initial user request.
 *   **Multi-Model Fallbacks:** Automatically switching to alternative providers (e.g., Anthropic or local models) in case of API outages or rate limits.
