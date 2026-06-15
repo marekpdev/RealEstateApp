@@ -4,13 +4,14 @@ The **Real Estate AI Investment Planner** is a Python-based multi-agent platform
 
 ### ⚡ Tech Stack At-a-Glance
 
-| Layer                   | Technologies Used                                        | Purpose / Role |
-|:------------------------|:---------------------------------------------------------| :--- |
-| **Multi-Agent AI**      | **LangGraph**, **LangChain**, **OpenAI LLMs**            | Manages parallel researcher nodes, state state-machines, and core reasoning. |
-| **API & Protocols**     | **FastAPI**, **Model Context Protocol (MCP)**            | Exposes application endpoints and handles dynamic tool discovery adapters. |
-| **Data & RAG Pipeline** | **Pinecone**, **Azure Blob Storage**                     | Hybrid vector/cloud knowledge base for municipal documents and zoning codes. |
-| **Infrastructure**      | **Docker**, **Terraform (IaC)**, **AKS (Kubernetes)**    | Handles multi-environment reproducibility, containerization, and cloud orchestration. |
-| **CI/CD & UX**          | **GHCR**, **Chainlit**                                   | Automated version-controlled container hosting and premium streaming investor dashboard. |
+| Layer                   | Technologies Used                                                    | Purpose / Role                                                                        |
+|:------------------------|:---------------------------------------------------------------------|:--------------------------------------------------------------------------------------|
+| **Multi-Agent AI**      | **LangGraph**, **LangChain**, **OpenAI LLMs**                        | Manages parallel researcher nodes, state state-machines, and core reasoning.          |
+| **API & Protocols**     | **FastAPI**, **Model Context Protocol (MCP)**                        | Exposes application endpoints and handles dynamic tool discovery adapters.            |
+| **Data & RAG Pipeline** | **Pinecone**, **Azure Blob Storage**                                 | Hybrid vector/cloud knowledge base for municipal documents and zoning codes.          |
+| **Infrastructure**      | **Docker**, **Terraform (IaC)**, **AKS (Kubernetes)**                | Handles multi-environment reproducibility, containerization, and cloud orchestration. |
+| **CI/CD**               | **GHCR**                                                             | Automated version-controlled container hosting.                                       |
+| **UX/UI**               | **Chainlit**                                                         | Interactive Chainlit UI featuring real-time, streamed agent reasoning updates.        |
 
 **Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
 
