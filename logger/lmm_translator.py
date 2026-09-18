@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from config import LLMModelType
+from config.config import OFFLINE_MODE, OPENAI_API_KEY
+from config.safety import guarded_httpx_clients
 
 class LogType(str, Enum):
     TOOL_START = "tool_start"
@@ -18,7 +20,35 @@ class LogSummarySchema(BaseModel):
         description="A concise, sleek, human-readable UI message starting with a contextual emoji. Never use raw JSON syntax."
     )
 
-_log_summary_llm = ChatOpenAI(model=LLMModelType.FAST_MODEL.value, temperature=0).with_structured_output(LogSummarySchema)
+_http_client, _http_async_client = guarded_httpx_clients("logger.lmm_translator._log_summary_llm")
+
+_log_summary_llm = ChatOpenAI(
+    model=LLMModelType.FAST_MODEL.value,
+    temperature=0,
+    api_key=OPENAI_API_KEY or "sk-offline-mode-placeholder",
+    http_client=_http_client,
+    http_async_client=_http_async_client,
+    http_socket_options=(),
+).with_structured_output(LogSummarySchema)
+
+_OFFLINE_EMOJI = {
+    LogType.NODE_START: "🔄",
+    LogType.NODE_SUMMARY: "🎯",
+    LogType.TOOL_START: "🔍",
+    LogType.TOOL_END: "✅",
+    LogType.GENERAL: "⚙️",
+}
+
+
+def _compile_ui_log_offline(log_type: LogType, context_name: str) -> str:
+    """
+    Deterministic stand-in for the LLM-written UI string. Keeps the same shape
+    (starts with an emoji, one short line) so the UI is unaffected, without spending
+    a real request per log line (see §6.8 in the learning roadmap).
+    """
+    emoji = _OFFLINE_EMOJI.get(log_type, "⚙️")
+    clean_context = context_name.replace("_", " ").title()
+    return f"{emoji} [offline] {clean_context}: {log_type.value.replace('_', ' ')}."
 
 _PROMPTS = {
     LogType.NODE_START: ChatPromptTemplate.from_messages([
@@ -84,6 +114,9 @@ async def compile_ui_log(log_type: LogType, context_name: str, raw_payload: Any)
     """
     if log_type not in _PROMPTS:
         log_type = LogType.GENERAL
+
+    if OFFLINE_MODE:
+        return _compile_ui_log_offline(log_type, context_name)
 
     if isinstance(raw_payload, (dict, list)):
         payload_str = json.dumps(raw_payload)

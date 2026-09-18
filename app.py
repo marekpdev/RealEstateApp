@@ -14,6 +14,7 @@ async def on_chat_start():
         debug_message = f"""
         ** DEBUG MODE ENABLED **
         - ENV VARS -
+        OFFLINE_MODE - {config.OFFLINE_MODE}
         MOCK_FINANCIAL_MODELER_AGENT_OUTPUT - {config.MOCK_FINANCIAL_MODELER_AGENT_OUTPUT}
         MOCK_INGEST_INPUT_AGENT_OUTPUT - {config.MOCK_INGEST_INPUT_AGENT_OUTPUT}
         MOCK_MARKET_DATA_AGENT_OUTPUT - {config.MOCK_MARKET_DATA_AGENT_OUTPUT}
