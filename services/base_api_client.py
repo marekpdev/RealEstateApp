@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException
 import httpx
 from config import config
+from config.safety import assert_online_call_allowed
 from logger.logger import log_agent_content
 
 
@@ -36,6 +37,7 @@ class BaseAPIClient:
             raise HTTPException(status_code=500, detail=f"Simulation error: Missing snapshot file at {fixture_path}")
 
         # 2. Production Network Routing
+        assert_online_call_allowed(f"BaseAPIClient -> {self.base_url}{endpoint}")
         try:
             url = f"{self.base_url}{endpoint}"
 

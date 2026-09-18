@@ -142,7 +142,8 @@ To ensure clean documentation architecture, all step-by-step terminal execution 
 ## 🧪 Testing & Mocking
 
 The application provides a comprehensive mocking suite for local development and CI testing to reduce API spend:
-*   **Agent Mocks:** Each agent can be toggled to return pre-configured responses using environment variables:
+*   **`OFFLINE_MODE`:** The master switch. Set to `true` (the default in `.env.example`) and the whole app - every agent mock below, plus the UI log translator - runs with zero credentials and zero network calls. Any code path that still attempts a real paid API call while `OFFLINE_MODE` is on raises immediately instead of silently spending money.
+*   **Agent Mocks:** Each agent can also be toggled individually to return pre-configured responses using environment variables:
     *   `MOCK_INGEST_INPUT_AGENT_OUTPUT`
     *   `MOCK_MARKET_DATA_AGENT_OUTPUT`
     *   `MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT`
