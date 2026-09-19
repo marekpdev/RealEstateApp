@@ -1,8 +1,29 @@
 services:
+  postgres:
+    image: postgres:16
+    container_name: realestateapp_postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=realestateapp
+      - POSTGRES_PASSWORD=realestateapp
+      - POSTGRES_DB=realestateapp
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U realestateapp -d realestateapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   web_app:
     build: .
     image: realestateapp:local
     container_name: realestateapp_container
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
@@ -21,3 +42,14 @@ services:
       - MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
       - MOCK_ZONING_LAW_AGENT_OUTPUT
       - MOCK_MARKET_DATA_API
+      # Overridden here: the host-shaped default in .env.example points at
+      # localhost, which inside this container is itself, not the postgres
+      # service. Compose's service-name DNS resolves "postgres" to that container.
+      - POSTGRES_DSN=postgresql+asyncpg://realestateapp:realestateapp@postgres:5432/realestateapp
+      - DB_POOL_SIZE
+      - DB_MAX_OVERFLOW
+      - DB_ECHO
+      - DB_PERSISTENCE_ENABLED
+
+volumes:
+  postgres_data:
