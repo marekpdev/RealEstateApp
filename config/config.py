@@ -11,6 +11,20 @@ GH_TOKEN = os.getenv("GH_TOKEN")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "real-estate-app")
 
+# Deliberately POSTGRES_DSN, never DATABASE_URL: chainlit/data/__init__.py activates
+# Chainlit's own persistence layer the moment DATABASE_URL is set in the environment,
+# then chokes on the postgresql+asyncpg:// scheme this app uses.
+POSTGRES_DSN = os.getenv(
+    "POSTGRES_DSN",
+    "postgresql+asyncpg://realestateapp:realestateapp@localhost:5432/realestateapp",
+)
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+DB_ECHO = get_env_bool("DB_ECHO")
+# Escape hatch for environments with no database at all. Everywhere else, an
+# unreachable database must fail loudly rather than silently record nothing.
+DB_PERSISTENCE_ENABLED = get_env_bool("DB_PERSISTENCE_ENABLED", default=True)
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
