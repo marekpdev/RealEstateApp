@@ -28,3 +28,12 @@ dependencies = [
     "pytest-asyncio>=0.23.0",
     "respx>=0.20.0",
 ]
+
+[tool.pytest.ini_options]
+# pytest-asyncio 1.x removed the event_loop fixture, so a session-scoped
+# engine fixture and a function-scoped test would otherwise land on different
+# event loops (every query then raises "Future attached to a different
+# loop"). Pin both the fixture loop and the test loop to the same
+# session-scoped loop explicitly.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
