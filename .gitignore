@@ -56,6 +56,10 @@ models/
 *.log
 logs/
 
+# Redis snapshot dump, written to the working directory by a locally-run
+# redis-server (e.g. verifying the worker outside Docker Compose).
+*.rdb
+
 # Chainlit auto-generated assets and translation files
 .chainlit/*
 !.chainlit/config.toml

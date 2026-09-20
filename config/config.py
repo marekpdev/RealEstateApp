@@ -33,6 +33,15 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
+# The graph now runs inside a Celery worker process, not inline in the
+# request handler - app.py/cli.py enqueue the work, then poll the
+# investment_requests row (the only channel both processes share right now)
+# until it reaches a terminal status. poll_interval trades responsiveness
+# for database load; timeout is a safety net so a caller never waits
+# forever on a job whose worker died without updating the row.
+REPORT_POLL_INTERVAL_SECONDS = float(os.getenv("REPORT_POLL_INTERVAL_SECONDS", "1.0"))
+REPORT_POLL_TIMEOUT_SECONDS = float(os.getenv("REPORT_POLL_TIMEOUT_SECONDS", "300"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

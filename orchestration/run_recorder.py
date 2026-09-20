@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -5,6 +6,7 @@ from typing import Dict, Optional, Set, Tuple
 
 from langchain_core.messages import HumanMessage
 
+from config import config
 from db.enums import JobStatus
 from db.models import Report
 from db.repositories import (
@@ -44,26 +46,26 @@ async def execute_and_record(
     recording one agent_runs row per node as the graph streams and the
     final report/status once it finishes.
 
+    A plain composition of claim_request() + run_claimed_request()/
+    get_replayed_outcome() - kept as one call for callers that run the
+    graph inline and don't need the id before the run finishes (tests,
+    and the DB_PERSISTENCE_ENABLED escape hatch's synchronous sibling
+    path). app.py/cli.py call the two halves separately instead (see
+    claim_request()'s docstring) so they can hand the id to a Celery task
+    before the run even starts.
+
     LangGraph orchestrates *within* a run; this module orchestrates the
     run's lifecycle in Postgres around it. Nothing here reaches into
     agents/ or graph.py's node bodies - db/ must never be imported by
     agents/, so persistence stays a concern this module owns from outside.
     """
-    request_id, should_run = await _claim(user_id, idempotency_key)
+    request_id, should_run = await claim_request(user_id, idempotency_key)
     if not should_run:
-        async with session_scope() as session:
-            report = await ReportRepository(session).get_by_request_id(request_id)
-        return RunOutcome(
-            request_id=request_id, status=JobStatus.COMPLETED, report=report, replayed=True
-        )
-
-    async with session_scope() as session:
-        await InvestmentRequestRepository(session).update_status(request_id, JobStatus.RUNNING)
-
-    return await _run_and_record(raw_query, request_id, recursion_limit)
+        return await get_replayed_outcome(request_id)
+    return await run_claimed_request(raw_query, request_id, recursion_limit)
 
 
-async def _claim(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.UUID, bool]:
+async def claim_request(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.UUID, bool]:
     """One short transaction, entirely separate from the run that may
     follow. city/budget aren't known yet - the graph hasn't run a single
     node - so the claiming insert writes them as empty strings;
@@ -79,6 +81,15 @@ async def _claim(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.UUID, b
     this one" state here; arbitrating two truly concurrent runs of the same
     key is a future task queue's concern, not this module's.
 
+    Public (not execute_and_record()'s private implementation detail)
+    because app.py/cli.py call it directly: InvestmentRequest.id is a
+    client-generated UUID (see db/models.py), assigned in Python and known
+    the moment this claim's INSERT flushes - well before the graph itself
+    has run a single node. That's what lets a caller learn the request_id
+    immediately, hand it to a Celery task as that task's argument (see
+    worker/tasks.py's generate_report), and start polling for it, all
+    without waiting for the run itself to even begin.
+
     Returns (request_id, should_run).
     """
     async with session_scope() as session:
@@ -88,6 +99,86 @@ async def _claim(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.UUID, b
         request_id = request.id
         already_completed = (not created) and request.status == JobStatus.COMPLETED
     return request_id, not already_completed
+
+
+async def get_replayed_outcome(request_id: uuid.UUID) -> RunOutcome:
+    """Builds the RunOutcome for a request_id claim_request() already
+    determined is COMPLETED (should_run=False): fetches the stored report
+    so the caller can show it without running anything."""
+    async with session_scope() as session:
+        report = await ReportRepository(session).get_by_request_id(request_id)
+    return RunOutcome(
+        request_id=request_id, status=JobStatus.COMPLETED, report=report, replayed=True
+    )
+
+
+async def run_claimed_request(
+    raw_query: str, request_id: uuid.UUID, recursion_limit: int = 20
+) -> RunOutcome:
+    """Runs the graph for a request_id that claim_request() has already
+    claimed (should_run=True) - the continuation execute_and_record() calls
+    right after its own claim, and the same continuation worker/tasks.py's
+    generate_report task calls after app.py/cli.py have claimed on its
+    behalf. Marks the row RUNNING, then streams and records exactly as
+    _run_and_record() always has."""
+    async with session_scope() as session:
+        await InvestmentRequestRepository(session).update_status(request_id, JobStatus.RUNNING)
+    return await _run_and_record(raw_query, request_id, recursion_limit)
+
+
+async def poll_until_terminal(
+    request_id: uuid.UUID,
+    *,
+    poll_interval: Optional[float] = None,
+    timeout: Optional[float] = None,
+) -> RunOutcome:
+    """Watches the investment_requests row for request_id until the Celery
+    worker running the graph (worker/tasks.py's generate_report) writes a
+    terminal status, or `timeout` elapses. Postgres is the only channel the
+    two processes share right now - this is a stand-in for the real push
+    mechanism a later phase adds (SSE over Redis pub/sub); until then, the
+    only way the caller can know the work finished is to keep asking the
+    durable record both processes already agree on. This is what "eventual
+    consistency" concretely means here: the row is not COMPLETED the
+    instant the task is enqueued, only eventually, and this function is the
+    one place that gap is bridged.
+
+    A non-terminal RunOutcome (status still PENDING/RUNNING) on return means
+    the timeout elapsed, not that the job failed - the worker may still be
+    running it; this call has just stopped watching.
+
+    poll_interval/timeout default to None, not directly to the config
+    values, and are resolved from config.* inside the function body rather
+    than bound as parameter defaults - a parameter default is evaluated
+    once, at import time, so binding it directly would freeze whatever
+    config.REPORT_POLL_INTERVAL_SECONDS held the moment this module was
+    first imported. Tests patch those config values to make polling fast;
+    a frozen default would silently ignore that patch, the same shape of
+    import-time-freezing trap already hit with POSTGRES_DSN (see
+    tests/conftest.py's _run_alembic_upgrade()).
+    """
+    loop = asyncio.get_running_loop()
+    poll_interval = poll_interval if poll_interval is not None else config.REPORT_POLL_INTERVAL_SECONDS
+    timeout = timeout if timeout is not None else config.REPORT_POLL_TIMEOUT_SECONDS
+    deadline = loop.time() + timeout
+    while True:
+        async with session_scope() as session:
+            request = await InvestmentRequestRepository(session).get_by_id(request_id)
+            if request is None:
+                raise RuntimeError(
+                    f"investment_requests row {request_id} vanished while polling"
+                )
+            status = request.status
+            if status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                report = None
+                if status == JobStatus.COMPLETED:
+                    report = await ReportRepository(session).get_by_request_id(request_id)
+                return RunOutcome(
+                    request_id=request_id, status=status, report=report, replayed=False
+                )
+        if loop.time() >= deadline:
+            return RunOutcome(request_id=request_id, status=status, report=None, replayed=False)
+        await asyncio.sleep(poll_interval)
 
 
 async def _run_and_record(
