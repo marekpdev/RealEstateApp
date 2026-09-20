@@ -15,3 +15,8 @@ __all__ = [
     "get_sessionmaker",
     "session_scope",
 ]
+
+# db.repositories is intentionally not re-exported here: it imports db.models,
+# and importing it eagerly from this package's own __init__ would risk a
+# circular import the moment anything in db.repositories needs to import
+# `db` itself. Import it directly: `from db.repositories import ...`.
