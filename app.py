@@ -5,7 +5,8 @@ from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from graph import compiledStateGraph
 from logger.logger import log_message, render_financial_report
-from orchestration.run_recorder import execute_and_record
+from orchestration.run_recorder import RunOutcome, claim_request, get_replayed_outcome, poll_until_terminal
+from worker.tasks import generate_report
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -47,12 +48,7 @@ async def handle_query(raw_query: str, *, idempotency_key: str) -> None:
         return
 
     try:
-        outcome = await execute_and_record(
-            raw_query,
-            user_id=DEMO_USER_ID,
-            idempotency_key=idempotency_key,
-            recursion_limit=20,
-        )
+        outcome = await _enqueue_and_await(raw_query, idempotency_key)
     except Exception as exc:
         await log_message(f"⚠️ Couldn't record this request in the database: {exc}")
         return
@@ -60,9 +56,29 @@ async def handle_query(raw_query: str, *, idempotency_key: str) -> None:
     if outcome.status == JobStatus.FAILED:
         await log_message("⚠️ The analysis failed partway through. Please try again.")
         return
+    if outcome.status != JobStatus.COMPLETED:
+        await log_message(
+            "⏳ This is taking longer than expected. The analysis is still running - check back shortly."
+        )
+        return
 
-    # A fresh run already rendered its report as a side effect inside
-    # financial_modeler_agent_node; only a replay (the graph never ran) needs
-    # it rendered explicitly here, or the user would never see it twice.
-    if outcome.replayed and outcome.report is not None:
+    # The graph now always runs in the Celery worker process (see
+    # worker/tasks.py's generate_report), which has no live Chainlit
+    # session - financial_modeler_agent_node's render-as-side-effect can
+    # never reach this session anymore, fresh run or replay alike. This is
+    # the only place that renders the report to the user now.
+    if outcome.report is not None:
         await render_financial_report(outcome.report.content)
+
+
+async def _enqueue_and_await(raw_query: str, idempotency_key: str) -> RunOutcome:
+    """Claims the request synchronously (fast: one idempotent insert-or-
+    select, see claim_request()'s docstring), then either replays an
+    already-completed report or enqueues the slow work onto the Celery
+    worker and polls the job row for a terminal status."""
+    request_id, should_run = await claim_request(DEMO_USER_ID, idempotency_key)
+    if not should_run:
+        return await get_replayed_outcome(request_id)
+
+    generate_report.delay(raw_query, str(request_id), 20)
+    return await poll_until_terminal(request_id)

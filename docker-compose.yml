@@ -36,6 +36,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
@@ -62,6 +64,14 @@ services:
       - DB_MAX_OVERFLOW
       - DB_ECHO
       - DB_PERSISTENCE_ENABLED
+      # app.py now enqueues generate_report onto the worker (Phase 2.2)
+      # instead of running the graph inline, so this container needs to
+      # reach Redis as a broker client too, not just the worker service.
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REPORT_POLL_INTERVAL_SECONDS
+      - REPORT_POLL_TIMEOUT_SECONDS
 
   worker:
     build: .

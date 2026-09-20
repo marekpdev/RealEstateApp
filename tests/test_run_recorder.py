@@ -9,7 +9,8 @@ from sqlalchemy import select
 from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from db.models import AgentRun, InvestmentRequest, Report
-from orchestration.run_recorder import execute_and_record
+from db.repositories import InvestmentRequestRepository, ReportRepository
+from orchestration.run_recorder import execute_and_record, poll_until_terminal
 
 
 def _unique_key() -> str:
@@ -190,3 +191,79 @@ async def test_execute_and_record_marks_in_flight_node_and_job_failed_on_excepti
         await db_session.execute(select(Report).where(Report.request_id == outcome.request_id))
     ).scalars().all()
     assert reports == []
+
+
+@pytest.mark.asyncio
+async def test_poll_until_terminal_returns_immediately_for_an_already_completed_row(db_session):
+    """The common case once a Celery worker has already finished by the
+    time the first poll happens: no looping, no sleeping - one check."""
+    key = _unique_key()
+    request = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=key, status=JobStatus.COMPLETED, city="Austin, TX", budget="$900,000"
+    )
+    db_session.add(request)
+    await db_session.flush()
+    report = await ReportRepository(db_session).create(request_id=request.id, content="report body")
+
+    outcome = await poll_until_terminal(request.id, poll_interval=0.01, timeout=5)
+
+    assert outcome.status == JobStatus.COMPLETED
+    assert outcome.report is not None
+    assert outcome.report.id == report.id
+
+
+@pytest.mark.asyncio
+async def test_poll_until_terminal_waits_through_non_terminal_polls(db_session):
+    """The row starts PENDING; nothing outside this test changes it until
+    the third poll, at which point it must be seen COMPLETED. This proves
+    the loop actually re-checks Postgres rather than trusting a stale first
+    read - the eventual-consistency gap this function exists to bridge."""
+    key = _unique_key()
+    request = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=key, status=JobStatus.PENDING, city="", budget=""
+    )
+    db_session.add(request)
+    await db_session.flush()
+
+    call_count = 0
+    real_get_by_id = InvestmentRequestRepository.get_by_id
+
+    async def _flip_to_completed_on_third_call(self, request_id):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 3:
+            # A plain UPDATE on this call's own (freshly opened) session,
+            # immediately followed by the real get_by_id on that same
+            # session - not a stale identity-map read (see db/models.py's
+            # repositories module docstrings on that trap), since this
+            # session has never loaded this row before.
+            await self.update_status(request_id, JobStatus.COMPLETED)
+        return await real_get_by_id(self, request_id)
+
+    with patch.object(
+        InvestmentRequestRepository, "get_by_id", _flip_to_completed_on_third_call
+    ):
+        outcome = await poll_until_terminal(request.id, poll_interval=0.01, timeout=5)
+
+    assert call_count == 3
+    assert outcome.status == JobStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_poll_until_terminal_gives_up_after_timeout_without_raising(db_session):
+    """A row stuck RUNNING forever (e.g. its worker crashed without ever
+    updating the row - not this phase's concern to prevent, see Phase 2.3's
+    retries/DLQ) must not hang the caller forever: poll_until_terminal
+    gives up at `timeout` and returns the last-seen non-terminal status,
+    not an exception and not a false COMPLETED/FAILED."""
+    key = _unique_key()
+    stuck = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=key, status=JobStatus.RUNNING, city="", budget=""
+    )
+    db_session.add(stuck)
+    await db_session.flush()
+
+    outcome = await poll_until_terminal(stuck.id, poll_interval=0.01, timeout=0.03)
+
+    assert outcome.status == JobStatus.RUNNING
+    assert outcome.report is None
