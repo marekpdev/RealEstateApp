@@ -25,6 +25,14 @@ DB_ECHO = get_env_bool("DB_ECHO")
 # unreachable database must fail loudly rather than silently record nothing.
 DB_PERSISTENCE_ENABLED = get_env_bool("DB_PERSISTENCE_ENABLED", default=True)
 
+# Broker (task queue) and result backend (task state/return values) are two
+# separate logical stores, kept on separate Redis logical databases so a
+# queue-inspection command never scans through result keys and vice versa -
+# even though both point at the same Redis server by default.
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: realestateapp_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   web_app:
     build: .
     image: realestateapp:local
@@ -50,6 +62,43 @@ services:
       - DB_MAX_OVERFLOW
       - DB_ECHO
       - DB_PERSISTENCE_ENABLED
+
+  worker:
+    build: .
+    image: realestateapp:local
+    container_name: realestateapp_worker
+    command: ["uv", "run", "celery", "-A", "worker.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - DEBUG_MODE
+      - GH_TOKEN
+      - RAPIDAPI_KEY
+      - BRAVE_API_KEY
+      - MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
+      - MOCK_INGEST_INPUT_AGENT_OUTPUT
+      - MOCK_MARKET_DATA_AGENT_OUTPUT
+      - MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT
+      - MOCK_ZONING_LAW_AGENT_OUTPUT
+      - MOCK_MARKET_DATA_API
+      - POSTGRES_DSN=postgresql+asyncpg://realestateapp:realestateapp@postgres:5432/realestateapp
+      - DB_POOL_SIZE
+      - DB_MAX_OVERFLOW
+      - DB_ECHO
+      - DB_PERSISTENCE_ENABLED
+      # Same reasoning as POSTGRES_DSN above: "redis" is the Compose service
+      # name, not a host reachable as "localhost" from inside this container.
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
 
 volumes:
   postgres_data:
