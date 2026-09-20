@@ -37,6 +37,8 @@ spec:
           value: "False"
         - name: PINECONE_INDEX_NAME
           value: "real-estate-app"
+        - name: DB_PERSISTENCE_ENABLED
+          value: "True"
 
         # Application testing toggles
         - name: MOCK_FINANCIAL_MODELER_AGENT_OUTPUT
@@ -85,3 +87,10 @@ spec:
             secretKeyRef:
               name: realestateapp-secrets
               key: AZURE_STORAGE_CONNECTION_STRING
+        # Contains a password, so it belongs here with the secrets rather
+        # than in the plain-text config block above.
+        - name: POSTGRES_DSN
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: POSTGRES_DSN

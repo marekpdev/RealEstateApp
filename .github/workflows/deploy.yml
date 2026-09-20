@@ -10,6 +10,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      # Exposed on localhost:5432 automatically - this job doesn't run inside
+      # its own container, so GitHub Actions maps every published service
+      # port straight onto the runner host.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: realestateapp
+          POSTGRES_PASSWORD: realestateapp
+          POSTGRES_DB: realestateapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,6 +48,8 @@ jobs:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          POSTGRES_DSN: postgresql+asyncpg://realestateapp:realestateapp@localhost:5432/realestateapp
+          DB_PERSISTENCE_ENABLED: "true"
 
   build-and-push:
     needs: test
