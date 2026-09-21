@@ -73,6 +73,21 @@ class InvestmentRequestRepository(BaseRepository):
             .values(status=status)
         )
 
+    async def increment_attempt_count(self, request_id: uuid.UUID) -> None:
+        """Called once per physical attempt a Celery task makes at this job -
+        the original try and every retry, whether or not the attempt itself
+        succeeds - so worker/tasks.py can tell "retried twice, then failed
+        for good" apart from "failed on the first and only try". A plain
+        atomic UPDATE ... SET attempt_count = attempt_count + 1 rather than
+        a read-then-write: Celery guarantees only one worker owns a given
+        task attempt at a time, so there's no concurrent writer to race
+        against, but the atomic form is free and doesn't rely on that."""
+        await self.session.execute(
+            update(InvestmentRequest)
+            .where(InvestmentRequest.id == request_id)
+            .values(attempt_count=InvestmentRequest.attempt_count + 1)
+        )
+
     async def update_extracted_details(
         self, request_id: uuid.UUID, *, city: str, budget: str
     ) -> None:
