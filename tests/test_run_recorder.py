@@ -10,7 +10,7 @@ from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from db.models import AgentRun, InvestmentRequest, Report
 from db.repositories import InvestmentRequestRepository, ReportRepository
-from orchestration.run_recorder import execute_and_record, poll_until_terminal
+from orchestration.run_recorder import execute_and_record, poll_until_terminal, run_claimed_request
 
 
 def _unique_key() -> str:
@@ -153,6 +153,73 @@ async def test_execute_and_record_resumes_a_stranded_pending_row(db_session, off
     request = await db_session.get(InvestmentRequest, stranded_id, populate_existing=True)
     assert request.status == JobStatus.COMPLETED
     assert request.city == "Los Angeles, CA"
+
+
+@pytest.mark.asyncio
+async def test_run_claimed_request_short_circuits_a_redelivered_completed_task(
+    db_session, offline_graph
+):
+    """The scenario this phase exists for: worker/tasks.py's generate_report
+    calls run_claimed_request() directly (not execute_and_record(), and not
+    through claim_request()'s own COMPLETED short-circuit), so a Celery
+    redelivery of the exact same task message - an ack lost after a
+    completed run, or a stale message replayed by hand - must not re-run
+    the graph a second time for a request_id that already finished. Asserts
+    against the compiled graph's own astream, the strongest proof nothing
+    downstream of it (agent_runs upserts, a second Report insert that would
+    otherwise violate reports' UNIQUE(request_id)) ran either."""
+    key = _unique_key()
+    first = await _run("Invest in Austin, TX up to $900,000", key)
+    assert first.status == JobStatus.COMPLETED
+
+    with patch("graph.compiledStateGraph.astream") as mock_astream:
+        redelivered = await run_claimed_request(
+            "A completely different query", first.request_id, 20
+        )
+
+    mock_astream.assert_not_called()
+    assert redelivered.status == JobStatus.COMPLETED
+    assert redelivered.replayed is True
+    assert redelivered.report.id == first.report.id
+
+    reports = (
+        await db_session.execute(select(Report).where(Report.request_id == first.request_id))
+    ).scalars().all()
+    assert len(reports) == 1  # the redelivery did not insert a second report
+
+    agent_runs = (
+        await db_session.execute(select(AgentRun).where(AgentRun.request_id == first.request_id))
+    ).scalars().all()
+    assert len(agent_runs) == 6  # still exactly the original six, none re-recorded
+
+
+@pytest.mark.asyncio
+async def test_run_claimed_request_skips_a_row_another_attempt_already_owns(db_session):
+    """A genuinely concurrent redelivery - the row is RUNNING because a
+    different physical attempt is mid-flight right now, not because a prior
+    one already finished. This call must not touch the graph and must not
+    block waiting on the other attempt; it just reports the in-progress
+    status back to its own caller (worker/tasks.py's generate_report, whose
+    result is only ever used for logging - the row itself is the source of
+    truth callers actually poll)."""
+    key = _unique_key()
+    owned_elsewhere = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=key, status=JobStatus.RUNNING, city="", budget="",
+    )
+    db_session.add(owned_elsewhere)
+    await db_session.flush()
+    request_id = owned_elsewhere.id
+
+    with patch("graph.compiledStateGraph.astream") as mock_astream:
+        outcome = await run_claimed_request("Invest in Austin, TX", request_id, 20)
+
+    mock_astream.assert_not_called()
+    assert outcome.status == JobStatus.RUNNING
+    assert outcome.report is None
+    assert outcome.replayed is False
+
+    request = await db_session.get(InvestmentRequest, request_id, populate_existing=True)
+    assert request.status == JobStatus.RUNNING  # untouched, still owned by the other attempt
 
 
 @pytest.mark.asyncio

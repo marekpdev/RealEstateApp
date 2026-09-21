@@ -141,6 +141,100 @@ async def test_create_idempotent_concurrent_claims_yield_one_insert_one_replay(d
 
 
 @pytest.mark.asyncio
+async def test_try_claim_run_succeeds_from_pending_and_failed(db_session):
+    """The two states a redelivered or resumed attempt is actually allowed
+    to run the graph from - a fresh claim that hasn't started yet, and a
+    prior attempt that failed and is being retried."""
+    repo = InvestmentRequestRepository(db_session)
+
+    pending = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=_unique_key(), status=JobStatus.PENDING,
+        city="", budget="",
+    )
+    failed = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=_unique_key(), status=JobStatus.FAILED,
+        city="", budget="",
+    )
+    db_session.add_all([pending, failed])
+    await db_session.flush()
+
+    assert await repo.try_claim_run(pending.id) is True
+    assert await repo.try_claim_run(failed.id) is True
+
+    assert (await db_session.get(InvestmentRequest, pending.id, populate_existing=True)).status == JobStatus.RUNNING
+    assert (await db_session.get(InvestmentRequest, failed.id, populate_existing=True)).status == JobStatus.RUNNING
+
+
+@pytest.mark.asyncio
+async def test_try_claim_run_refuses_completed_and_running(db_session):
+    """The redelivery-safety guarantee itself: a row already COMPLETED (a
+    prior attempt already finished) or already RUNNING (a different
+    physical attempt currently owns it) must not be handed to a second
+    caller - and must not have its status touched by the refusal."""
+    repo = InvestmentRequestRepository(db_session)
+
+    completed = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=_unique_key(), status=JobStatus.COMPLETED,
+        city="Austin", budget="$500k",
+    )
+    running = InvestmentRequest(
+        user_id=DEMO_USER_ID, idempotency_key=_unique_key(), status=JobStatus.RUNNING,
+        city="", budget="",
+    )
+    db_session.add_all([completed, running])
+    await db_session.flush()
+
+    assert await repo.try_claim_run(completed.id) is False
+    assert await repo.try_claim_run(running.id) is False
+
+    assert (await db_session.get(InvestmentRequest, completed.id, populate_existing=True)).status == JobStatus.COMPLETED
+    assert (await db_session.get(InvestmentRequest, running.id, populate_existing=True)).status == JobStatus.RUNNING
+
+
+@pytest.mark.asyncio
+async def test_try_claim_run_concurrent_redelivery_yields_exactly_one_winner(db_engine):
+    """The real proof, on separate connections exactly like
+    test_create_idempotent_concurrent_claims_yield_one_insert_one_replay
+    above: two genuinely concurrent callers racing try_claim_run() for the
+    same request_id - standing in for Redis's visibility-timeout
+    redelivery handing the same task to two workers while the first is
+    still mid-run - must yield exactly one True. A plain read-then-branch
+    could let both see PENDING and both proceed; only the database's own
+    row lock on the conditional UPDATE can arbitrate this atomically."""
+    sessionmaker = async_sessionmaker(db_engine, expire_on_commit=False)
+    key = _unique_key()
+
+    async with sessionmaker() as setup_session:
+        request = InvestmentRequest(
+            user_id=DEMO_USER_ID, idempotency_key=key, status=JobStatus.PENDING,
+            city="", budget="",
+        )
+        setup_session.add(request)
+        await setup_session.commit()
+        request_id = request.id
+
+    async def claim() -> bool:
+        async with sessionmaker() as session:
+            won = await InvestmentRequestRepository(session).try_claim_run(request_id)
+            await session.commit()
+            return won
+
+    try:
+        results = await asyncio.gather(claim(), claim())
+        assert sorted(results) == [False, True]
+
+        async with sessionmaker() as session:
+            row = await session.get(InvestmentRequest, request_id)
+        assert row.status == JobStatus.RUNNING
+    finally:
+        async with sessionmaker() as cleanup_session:
+            await cleanup_session.execute(
+                delete(InvestmentRequest).where(InvestmentRequest.id == request_id)
+            )
+            await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
 async def test_cascade_delete_removes_report_and_agent_runs(db_session):
     request = InvestmentRequest(
         user_id=DEMO_USER_ID,

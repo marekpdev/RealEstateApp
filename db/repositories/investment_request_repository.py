@@ -62,6 +62,40 @@ class InvestmentRequestRepository(BaseRepository):
             return existing, False
         return request, True
 
+    async def try_claim_run(self, request_id: uuid.UUID) -> bool:
+        """Atomically transitions request_id to RUNNING, but only if it is
+        currently PENDING or FAILED - the two states from which re-running
+        the graph is actually correct (see claim_request()'s own docstring
+        in orchestration/run_recorder.py on why a stranded PENDING/FAILED
+        row is resumed rather than rejected). A conditional
+        UPDATE ... WHERE ... RETURNING, not a read-then-branch: Redis's
+        at-least-once task delivery (the broker only drops a message once a
+        worker acks it having finished, so a crashed or slow worker gets it
+        redelivered) can hand the same Celery message to two workers while
+        the first is still mid-run, not only after it has already finished
+        - a plain SELECT of the current
+        status takes no lock a second, genuinely concurrent caller is
+        obliged to respect, the exact TOCTOU shape create_idempotent()'s own
+        docstring already warns about. The database's row-level lock on the
+        UPDATE is what actually makes this atomic: of two callers racing for
+        the same request_id, only one can ever see this return True.
+
+        Returns True if this call is the one that should run the graph.
+        False means someone else already owns it (status is RUNNING) or it
+        is already done (COMPLETED) - the caller must not touch the graph,
+        agent_runs, or reports for this request_id in that case.
+        """
+        result = await self.session.execute(
+            update(InvestmentRequest)
+            .where(
+                InvestmentRequest.id == request_id,
+                InvestmentRequest.status.in_([JobStatus.PENDING, JobStatus.FAILED]),
+            )
+            .values(status=JobStatus.RUNNING)
+            .returning(InvestmentRequest.id)
+        )
+        return result.first() is not None
+
     async def update_status(self, request_id: uuid.UUID, status: JobStatus) -> None:
         """A plain UPDATE, not a SELECT-then-mutate-then-flush - the caller
         (orchestration/run_recorder.py) only has the id, and this is called
