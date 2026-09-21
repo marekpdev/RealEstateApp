@@ -119,11 +119,48 @@ async def run_claimed_request(
     claimed (should_run=True) - the continuation execute_and_record() calls
     right after its own claim, and the same continuation worker/tasks.py's
     generate_report task calls after app.py/cli.py have claimed on its
-    behalf. Marks the row RUNNING, then streams and records exactly as
-    _run_and_record() always has."""
+    behalf.
+
+    claim_request() only guards against a *second request* for the same
+    idempotency key - it says nothing about this exact call happening more
+    than once for the same request_id, which Redis's at-least-once task
+    delivery (the broker only drops a message once a worker acks it having
+    finished) makes a real possibility: a completed task's ack can be lost
+    and the identical message redelivered, or a slow task can be
+    redelivered to a second worker before the first has finished (a
+    visibility-timeout redelivery, genuinely concurrent with the first
+    attempt). try_claim_run() is the atomic gate against
+    both: it only transitions PENDING/FAILED -> RUNNING, so a redelivery
+    that arrives after this request already reached COMPLETED (or that
+    races a still-RUNNING sibling) sees should_run=False and never touches
+    the graph, agent_runs, or reports a second time.
+    """
     async with session_scope() as session:
-        await InvestmentRequestRepository(session).update_status(request_id, JobStatus.RUNNING)
+        should_run = await InvestmentRequestRepository(session).try_claim_run(request_id)
+    if not should_run:
+        return await _outcome_for_already_claimed(request_id)
     return await _run_and_record(raw_query, request_id, recursion_limit)
+
+
+async def _outcome_for_already_claimed(request_id: uuid.UUID) -> RunOutcome:
+    """Builds the RunOutcome for a request_id try_claim_run() refused to
+    hand to this caller. Two distinct reasons collapse into the same
+    should_run=False, so the row's current status is read back to tell them
+    apart: COMPLETED means a prior attempt already finished (a genuine
+    redelivery-after-success) and replays its stored report exactly like
+    claim_request()'s own COMPLETED short-circuit does; RUNNING means a
+    different, still-in-flight physical attempt owns this request_id right
+    now (a genuinely concurrent redelivery) - this call reports that
+    in-progress status as-is rather than waiting on the other attempt,
+    which is what lets the two compose safely without either blocking on
+    the other."""
+    async with session_scope() as session:
+        request = await InvestmentRequestRepository(session).get_by_id(request_id)
+    if request.status == JobStatus.COMPLETED:
+        return await get_replayed_outcome(request_id)
+    return RunOutcome(
+        request_id=request_id, status=request.status, report=None, replayed=False
+    )
 
 
 async def poll_until_terminal(

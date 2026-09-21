@@ -1,15 +1,17 @@
 import asyncio
+import contextlib
 import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from celery.contrib.testing.worker import start_worker
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
+import agents.zoning_law as zoning_law_module
 from config import config
 from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
-from db.models import InvestmentRequest
+from db.models import AgentRun, InvestmentRequest, Report
 from db.repositories import InvestmentRequestRepository
 from db.session import dispose_engine, session_scope
 from orchestration.run_recorder import RunOutcome
@@ -292,6 +294,74 @@ def test_generate_report_retries_and_recovers_within_max_retries(celery_worker_p
 
         row = asyncio.run(_read_request_row(request_id))
         assert row.attempt_count == 3  # 2 injected failures + the attempt that succeeded
+    finally:
+        asyncio.run(_delete_request_row(request_id))
+
+
+@pytest.fixture
+def offline_graph():
+    """The same mock set test_run_recorder.py's own offline_graph fixture
+    uses. Needed here too because the redelivery test below runs the real
+    (unmocked) run_claimed_request() through generate_report() itself,
+    rather than patching run_claimed_request out like every other test in
+    this file does."""
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("agents.ingest_input.MOCK_INGEST_INPUT_AGENT_OUTPUT", True))
+        stack.enter_context(patch("agents.market_data.MOCK_MARKET_DATA_AGENT_OUTPUT", True))
+        stack.enter_context(
+            patch("agents.neighborhood_vibe.MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT", True)
+        )
+        stack.enter_context(patch("agents.zoning_law.MOCK_ZONING_LAW_AGENT_OUTPUT", True))
+        stack.enter_context(
+            patch("agents.financial_modeler.MOCK_FINANCIAL_MODELER_AGENT_OUTPUT", True)
+        )
+        stack.enter_context(patch("logger.lmm_translator.OFFLINE_MODE", True))
+        yield
+
+
+def test_generate_report_redelivery_short_circuits_without_rerunning_graph(offline_graph):
+    """The end-to-end proof of this phase's guarantee, through the real
+    task entrypoint rather than a mocked-out run_claimed_request(): two
+    physical generate_report() calls for the same request_id - standing in
+    for a Celery redelivery of the identical task message, e.g. an ack lost
+    after the first call already committed COMPLETED - must produce exactly
+    one graph run (one mock agent invocation, standing in for "no second
+    LLM spend"), one report row, and six agent_runs rows, not twelve or a
+    crash on reports' UNIQUE(request_id) constraint."""
+    request_id = asyncio.run(_create_real_request_row())
+    real_zoning_mock = zoning_law_module._get_zoning_law_mock_response
+    try:
+        with patch.object(
+            zoning_law_module, "_get_zoning_law_mock_response", wraps=real_zoning_mock
+        ) as mock_zoning:
+            first_result = generate_report(
+                "Invest in Austin, TX up to $900,000", str(request_id), 20
+            )
+            second_result = generate_report(
+                "A completely different query", str(request_id), 20
+            )
+
+        assert first_result == "completed"
+        assert second_result == "completed"
+        assert mock_zoning.call_count == 1  # the redelivery never re-ran the graph
+
+        async def _read_state():
+            async with session_scope() as session:
+                reports = (
+                    await session.execute(select(Report).where(Report.request_id == request_id))
+                ).scalars().all()
+                agent_runs = (
+                    await session.execute(select(AgentRun).where(AgentRun.request_id == request_id))
+                ).scalars().all()
+                request = await InvestmentRequestRepository(session).get_by_id(request_id)
+            await dispose_engine()
+            return reports, agent_runs, request
+
+        reports, agent_runs, request = asyncio.run(_read_state())
+        assert len(reports) == 1
+        assert len(agent_runs) == 6
+        assert request.status == JobStatus.COMPLETED
+        assert request.attempt_count == 2  # two genuine physical attempts
     finally:
         asyncio.run(_delete_request_row(request_id))
 
