@@ -72,6 +72,15 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - REPORT_POLL_INTERVAL_SECONDS
       - REPORT_POLL_TIMEOUT_SECONDS
+      # generate_report's retry/backoff/DLQ policy - passed here too
+      # because this process imports worker.tasks (to call .delay()),
+      # which evaluates these as the task's decorator arguments on import,
+      # even though only the worker process ever actually executes a retry.
+      - TASK_MAX_RETRIES
+      - TASK_RETRY_BACKOFF_BASE_SECONDS
+      - TASK_RETRY_BACKOFF_MAX_SECONDS
+      - DEAD_LETTER_QUEUE_NAME
+      - TASK_FAILURE_INJECTION_COUNT
 
   worker:
     build: .
@@ -109,6 +118,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - TASK_MAX_RETRIES
+      - TASK_RETRY_BACKOFF_BASE_SECONDS
+      - TASK_RETRY_BACKOFF_MAX_SECONDS
+      - DEAD_LETTER_QUEUE_NAME
+      - TASK_FAILURE_INJECTION_COUNT
 
 volumes:
   postgres_data:

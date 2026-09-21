@@ -1,14 +1,80 @@
+import asyncio
 import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from celery.contrib.testing.worker import start_worker
+from sqlalchemy import delete
 
 from config import config
+from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
+from db.models import InvestmentRequest
+from db.repositories import InvestmentRequestRepository
+from db.session import dispose_engine, session_scope
 from orchestration.run_recorder import RunOutcome
 from worker.celery_app import celery_app
-from worker.tasks import generate_report, ping
+from worker.tasks import SimulatedTaskFailure, generate_report, ping
+
+
+async def _create_real_request_row() -> uuid.UUID:
+    """Inserts a genuine investment_requests row against the real
+    (non-isolated) default engine - the same engine every test in this
+    file already touches via generate_report()'s own dispose_engine()
+    calls, since nothing here uses the db_session fixture's rebound test
+    connection. Callers must clean up with _delete_request_row().
+
+    Disposes the engine before returning for the same reason
+    generate_report() itself does (see worker/tasks.py's own docstring):
+    each of these helpers is its own asyncio.run() call from a
+    plain sync test function, a fresh event loop every time, while
+    db/session.py's engine is a process-wide singleton. Leaving a live
+    engine cached here would hand the *next* asyncio.run() call - whether
+    that's another one of these helpers or generate_report()'s own -
+    connections bound to this call's already-closed loop.
+    """
+    async with session_scope() as session:
+        request, _ = await InvestmentRequestRepository(session).create_idempotent(
+            user_id=DEMO_USER_ID,
+            idempotency_key=f"worker-test-{uuid.uuid4()}",
+            city="",
+            budget="",
+        )
+        request_id = request.id
+    await dispose_engine()
+    return request_id
+
+
+async def _delete_request_row(request_id: uuid.UUID) -> None:
+    async with session_scope() as session:
+        await session.execute(
+            delete(InvestmentRequest).where(InvestmentRequest.id == request_id)
+        )
+    await dispose_engine()
+
+
+async def _read_request_row(request_id: uuid.UUID) -> InvestmentRequest:
+    async with session_scope() as session:
+        row = await InvestmentRequestRepository(session).get_by_id(request_id)
+    await dispose_engine()
+    return row
+
+
+@pytest.fixture(autouse=True)
+def _dispose_stale_engine_between_tests():
+    """This file's tests each drive their own asyncio.run() call (directly,
+    via generate_report(), or via a real worker's background-thread task
+    execution) against db/session.py's process-wide engine singleton - a
+    fresh event loop every time. One test
+    (test_generate_report_disposes_the_db_engine_after_each_run) mocks the
+    real dispose_engine() away on purpose, to assert the call happens
+    without needing a second real task to prove the crash it's a
+    regression test for - which deliberately leaves the singleton holding
+    connections bound to that test's own, by-then-closed loop. Disposing
+    it here, immediately after every test in its own fresh loop, prevents
+    that from leaking into whichever test happens to run next."""
+    yield
+    asyncio.run(dispose_engine())
 
 
 def test_celery_app_configured_with_separate_broker_and_backend():
@@ -112,3 +178,134 @@ def test_generate_report_disposes_the_db_engine_after_each_run():
         generate_report("Invest in Austin, TX", str(request_id), 20)
 
     mock_dispose.assert_awaited_once()
+
+
+def test_generate_report_configured_with_retry_backoff_and_jitter():
+    """The decorator arguments themselves - asserted directly on the task
+    object rather than by observing a real retry (that's covered by the
+    end-to-end tests below), since these five values are what actually
+    drive Celery's autoretry machinery regardless of how a given attempt
+    plays out."""
+    assert generate_report.autoretry_for == (Exception,)
+    assert generate_report.retry_backoff == config.TASK_RETRY_BACKOFF_BASE_SECONDS
+    assert generate_report.retry_backoff_max == config.TASK_RETRY_BACKOFF_MAX_SECONDS
+    assert generate_report.retry_jitter is True
+    assert generate_report.max_retries == config.TASK_MAX_RETRIES
+
+
+def test_generate_report_increments_attempt_count_on_every_physical_attempt():
+    """increment_attempt_count() runs before run_claimed_request() is even
+    reached, on every physical call to the task body - proven here by
+    calling generate_report() directly three times for the same
+    request_id, standing in for three physical attempts (the original try
+    plus two retries), and reading the row's attempt_count back afterward."""
+    request_id = asyncio.run(_create_real_request_row())
+    fake_outcome = RunOutcome(
+        request_id=request_id, status=JobStatus.COMPLETED, report=None, replayed=False
+    )
+    try:
+        with patch(
+            "worker.tasks.run_claimed_request", new_callable=AsyncMock, return_value=fake_outcome
+        ):
+            for _ in range(3):
+                generate_report("Invest in Austin, TX", str(request_id), 20)
+
+        row = asyncio.run(_read_request_row(request_id))
+        assert row.attempt_count == 3
+    finally:
+        asyncio.run(_delete_request_row(request_id))
+
+
+def test_generate_report_injected_failure_short_circuits_before_run_claimed_request():
+    """config.TASK_FAILURE_INJECTION_COUNT is read fresh on every call (not
+    bound as a decorator/parameter default - the same import-time-freezing
+    trap the roadmap already documents elsewhere would otherwise silently
+    ignore this patch), so setting it to 1 here makes a direct call (whose
+    self.request.retries defaults to 0, an attempt that hasn't been
+    retried yet - 0 < 1) raise before run_claimed_request is ever awaited."""
+    request_id = asyncio.run(_create_real_request_row())
+    try:
+        with patch(
+            "worker.tasks.run_claimed_request", new_callable=AsyncMock
+        ) as mock_run, patch.object(config, "TASK_FAILURE_INJECTION_COUNT", 1):
+            with pytest.raises(SimulatedTaskFailure):
+                generate_report("Invest in Austin, TX", str(request_id), 20)
+        mock_run.assert_not_awaited()
+    finally:
+        asyncio.run(_delete_request_row(request_id))
+
+
+def test_on_failure_marks_request_failed_and_routes_to_dead_letter_queue():
+    """Simulates Celery invoking on_failure() the way it would once
+    max_retries is exhausted - args exactly as generate_report.delay()
+    would have supplied them, kwargs empty since this task is always
+    called positionally. worker.tasks._route_to_dead_letter_queue is
+    mocked here, not celery_app.send_task directly: Task.delay()/
+    apply_async() are themselves thin wrappers around self.app.send_task()
+    under the hood, so mocking that attribute globally would silently
+    break any real .delay() call sharing the same test - a dedicated
+    wrapper function is what lets this test prove the DLQ routing call
+    happens with the right arguments without that risk. The status update
+    goes through the real engine so the assertion reads the row back
+    rather than trusting a mock."""
+    request_id = asyncio.run(_create_real_request_row())
+    try:
+        with patch("worker.tasks._route_to_dead_letter_queue") as mock_route:
+            generate_report.on_failure(
+                SimulatedTaskFailure("boom"),
+                "task-abc",
+                ("Invest in Austin, TX", str(request_id), 20),
+                {},
+                None,
+            )
+
+        mock_route.assert_called_once_with(
+            "task-abc", "Invest in Austin, TX", str(request_id), "boom"
+        )
+
+        row = asyncio.run(_read_request_row(request_id))
+        assert row.status == JobStatus.FAILED
+    finally:
+        asyncio.run(_delete_request_row(request_id))
+
+
+def test_generate_report_retries_and_recovers_within_max_retries(celery_worker_process):
+    """config.TASK_MAX_RETRIES is bound into the decorator at import time
+    (Celery resolves retry options once, at task-definition time - a real
+    constraint, not an oversight, so this test works within the actual
+    configured value rather than trying to patch it away).
+    TASK_FAILURE_INJECTION_COUNT=2 (below max_retries) makes the first two
+    physical attempts raise; the third (self.request.retries == 2) gets
+    through to run_claimed_request and succeeds - proving a task that
+    fails partway through genuinely recovers via retry rather than only
+    ever delaying an eventual failure."""
+    request_id = asyncio.run(_create_real_request_row())
+    fake_outcome = RunOutcome(
+        request_id=request_id, status=JobStatus.COMPLETED, report=None, replayed=False
+    )
+    try:
+        with patch(
+            "worker.tasks.run_claimed_request", new_callable=AsyncMock, return_value=fake_outcome
+        ), patch.object(config, "TASK_FAILURE_INJECTION_COUNT", 2):
+            result = generate_report.delay("Invest in Austin, TX", str(request_id), 20)
+            assert result.get(timeout=30) == "completed"
+
+        row = asyncio.run(_read_request_row(request_id))
+        assert row.attempt_count == 3  # 2 injected failures + the attempt that succeeded
+    finally:
+        asyncio.run(_delete_request_row(request_id))
+
+
+# Deliberately not automated: a fourth test drove config.TASK_FAILURE_
+# INJECTION_COUNT past TASK_MAX_RETRIES through the real embedded worker to
+# prove retries actually exhaust and land a message on the dead-letter
+# queue end to end. Every version of it hit the same wall - the embedded
+# test worker's shutdown handshake does not tolerate a task still
+# mid-retry-schedule, or whose on_failure() callback is still running in
+# the background, at module teardown, and hung or errored unpredictably
+# rather than failing cleanly. What that test would have proven is instead
+# covered piecewise by the tests above (retries genuinely recover, and
+# on_failure() genuinely marks FAILED and routes to the DLQ once Celery
+# decides an attempt is final) plus a one-time manual verification against
+# a real, standalone `celery worker` process - see this phase's learning
+# document for the transcript.

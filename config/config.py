@@ -42,6 +42,27 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:63
 REPORT_POLL_INTERVAL_SECONDS = float(os.getenv("REPORT_POLL_INTERVAL_SECONDS", "1.0"))
 REPORT_POLL_TIMEOUT_SECONDS = float(os.getenv("REPORT_POLL_TIMEOUT_SECONDS", "300"))
 
+# generate_report's retry policy. TASK_MAX_RETRIES bounds how many times a
+# task that raises can be redelivered before it's treated as poison and
+# routed to the dead-letter queue instead of retried forever.
+# TASK_RETRY_BACKOFF_BASE_SECONDS/TASK_RETRY_BACKOFF_MAX_SECONDS feed
+# Celery's retry_backoff (exponential: base * 2**retries, capped at max) -
+# kept small here (versus Celery's own 1s/600s defaults) so a real worker
+# exhausting retries in a test doesn't need to wait minutes to do it.
+TASK_MAX_RETRIES = int(os.getenv("TASK_MAX_RETRIES", "3"))
+TASK_RETRY_BACKOFF_BASE_SECONDS = int(os.getenv("TASK_RETRY_BACKOFF_BASE_SECONDS", "1"))
+TASK_RETRY_BACKOFF_MAX_SECONDS = int(os.getenv("TASK_RETRY_BACKOFF_MAX_SECONDS", "8"))
+# The Redis list generate_report routes a task to once TASK_MAX_RETRIES is
+# exhausted. Nothing consumes it automatically - a poison message sitting
+# here is exactly the point (see worker/tasks.py's dead_letter task).
+DEAD_LETTER_QUEUE_NAME = os.getenv("DEAD_LETTER_QUEUE_NAME", "dead_letter")
+# Deliberate failure-injection knob, off (0) by default. Set to N to make
+# generate_report's first N physical attempts (the original try plus every
+# retry) raise a simulated transient failure before doing any real work -
+# the only practical way to exercise the retry/backoff/DLQ path on demand
+# without actually breaking Postgres or Redis. See worker/tasks.py.
+TASK_FAILURE_INJECTION_COUNT = int(os.getenv("TASK_FAILURE_INJECTION_COUNT", "0"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

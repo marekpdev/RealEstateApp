@@ -204,3 +204,28 @@ async def test_agent_run_upsert_inserts_then_updates_without_clobbering(db_sessi
 
     rows = await repo.list_by_request_id(request.id)
     assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_increment_attempt_count_is_a_plain_atomic_increment(db_session):
+    """A bare UPDATE ... SET attempt_count = attempt_count + 1, not a
+    read-then-write - calling it three times against the same row must
+    land on 3, matching the row's default of 0 at creation."""
+    request = InvestmentRequest(
+        user_id=DEMO_USER_ID,
+        idempotency_key=_unique_key(),
+        status=JobStatus.PENDING,
+        city="",
+        budget="",
+    )
+    db_session.add(request)
+    await db_session.flush()
+    assert request.attempt_count == 0
+
+    repo = InvestmentRequestRepository(db_session)
+    for _ in range(3):
+        await repo.increment_attempt_count(request.id)
+    await db_session.flush()
+
+    persisted = await db_session.get(InvestmentRequest, request.id, populate_existing=True)
+    assert persisted.attempt_count == 3

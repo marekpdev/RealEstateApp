@@ -1,9 +1,77 @@
 import asyncio
 import uuid
 
-from db.session import dispose_engine
+from celery import Task
+from celery.utils.log import get_task_logger
+
+from config import config
+from db.enums import JobStatus
+from db.repositories import InvestmentRequestRepository
+from db.session import dispose_engine, session_scope
 from orchestration.run_recorder import run_claimed_request
 from worker.celery_app import celery_app
+
+logger = get_task_logger(__name__)
+
+
+class SimulatedTaskFailure(Exception):
+    """Raised only by generate_report's own config.TASK_FAILURE_INJECTION_COUNT
+    check - a deliberate stand-in for a genuine infrastructure failure (a
+    dropped Postgres connection, a Redis blip) that this phase's retry/
+    backoff/DLQ machinery needs to be exercised against on demand, without
+    actually having to break a real service to prove any of it works."""
+
+
+class ReportGenerationTask(Task):
+    """Handles the one thing Celery's autoretry_for doesn't do for you:
+    reacting to a task that has no retries left. Celery calls on_failure()
+    exactly once per task id, and only for the attempt that's genuinely
+    final - either the raised exception isn't in autoretry_for, or
+    max_retries attempts are already spent. An attempt that's about to be
+    retried never reaches this; it goes through on_retry() instead, which
+    the default Task implementation already handles by just logging."""
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        raw_query = args[0] if len(args) > 0 else kwargs.get("raw_query")
+        request_id = args[1] if len(args) > 1 else kwargs.get("request_id")
+        logger.error(
+            "worker.generate_report[%s] exhausted retries for request %s: %s",
+            task_id, request_id, exc,
+        )
+
+        async def _mark_permanently_failed() -> None:
+            try:
+                async with session_scope() as session:
+                    await InvestmentRequestRepository(session).update_status(
+                        uuid.UUID(request_id), JobStatus.FAILED
+                    )
+            finally:
+                await dispose_engine()
+
+        asyncio.run(_mark_permanently_failed())
+        _route_to_dead_letter_queue(task_id, raw_query, request_id, str(exc))
+
+
+def _route_to_dead_letter_queue(
+    task_id: str, raw_query: str, request_id: str, error_message: str
+) -> None:
+    """Celery/Redis has no first-class dead-letter concept (unlike
+    RabbitMQ) - routing a plain task to a dedicated queue that nothing
+    currently consumes is the standard stand-in. dead_letter itself never
+    runs automatically; the message just sits in that queue (a Redis list)
+    for a human to inspect or manually replay.
+
+    A separate function, not inlined into on_failure(), specifically so
+    tests can patch it without also patching celery_app.send_task itself -
+    Task.delay()/apply_async() are themselves thin wrappers around
+    self.app.send_task() under the hood, so mocking that attribute
+    globally silently breaks every .delay() call in the same test, not
+    just this one deliberate use of it."""
+    celery_app.send_task(
+        "worker.dead_letter",
+        args=[task_id, raw_query, request_id, error_message],
+        queue=config.DEAD_LETTER_QUEUE_NAME,
+    )
 
 
 @celery_app.task(name="worker.ping")
@@ -14,8 +82,29 @@ def ping() -> str:
     return "pong"
 
 
-@celery_app.task(name="worker.generate_report")
-def generate_report(raw_query: str, request_id: str, recursion_limit: int = 20) -> str:
+@celery_app.task(
+    bind=True,
+    base=ReportGenerationTask,
+    name="worker.generate_report",
+    # Anything that escapes the body below - not the agent-level failures
+    # run_claimed_request()'s own _run_and_record() already catches and
+    # records as a FAILED row internally, but a genuine infrastructure
+    # failure outside that (a dropped database connection while marking
+    # the row RUNNING, a Redis hiccup) or an injected one - is presumed
+    # transient and worth retrying, up to max_retries.
+    autoretry_for=(Exception,),
+    retry_backoff=config.TASK_RETRY_BACKOFF_BASE_SECONDS,
+    retry_backoff_max=config.TASK_RETRY_BACKOFF_MAX_SECONDS,
+    # Full jitter (Celery's default when retry_jitter=True): each retry's
+    # delay is chosen uniformly at random between 0 and the exponential
+    # backoff ceiling, not the ceiling itself. Without it, every worker
+    # instance that failed on the same broker outage would retry at
+    # exactly 1s, 2s, 4s... in lockstep, re-creating the exact thundering
+    # herd against Postgres/Redis that backoff is supposed to relieve.
+    retry_jitter=True,
+    max_retries=config.TASK_MAX_RETRIES,
+)
+def generate_report(self, raw_query: str, request_id: str, recursion_limit: int = 20) -> str:
     """Runs the multi-agent graph for an already-claimed request and records
     its outcome - the task app.py/cli.py enqueue instead of calling
     orchestration.run_recorder.execute_and_record() inline.
@@ -52,11 +141,40 @@ def generate_report(raw_query: str, request_id: str, recursion_limit: int = 20) 
     differently - see tests/test_app_wiring.py's _inline_worker()).
     dispose_engine() inside the same asyncio.run() call, right before this
     loop itself closes, is what makes the next task's get_engine() see no
-    cached engine and lazily build a fresh one bound to *its* new loop.
+    cached engine and lazily build a fresh one bound to *its* new loop. This
+    now runs on every physical attempt (including ones that raise before
+    reaching run_claimed_request), not just successful ones - a retried
+    attempt gets its own fresh asyncio.run() call from Celery too, so it
+    needs the same clean slate the very first attempt does.
+
+    Retries and the dead-letter queue: see this task's autoretry_for/
+    retry_backoff/retry_jitter/max_retries decorator arguments and
+    ReportGenerationTask.on_failure() above. After max_retries attempts a
+    still-failing task is genuinely "poison" - retrying it again would
+    never succeed no matter how many more times it's redelivered - and
+    on_failure() takes over: marks the job FAILED for good and routes the
+    task to the dead-letter queue instead of Celery quietly dropping it.
+
+    config.TASK_FAILURE_INJECTION_COUNT is the deliberate failure-injection
+    knob this phase's own verification needs: set to N, the first N
+    physical attempts raise SimulatedTaskFailure before touching
+    run_claimed_request at all (self.request.retries counts *prior*
+    retries, so the original attempt has retries=0). Left at 0 (the
+    default) this check is never true and behavior is identical to Phase
+    2.2's task.
     """
 
     async def _run() -> str:
         try:
+            async with session_scope() as session:
+                await InvestmentRequestRepository(session).increment_attempt_count(
+                    uuid.UUID(request_id)
+                )
+            if self.request.retries < config.TASK_FAILURE_INJECTION_COUNT:
+                raise SimulatedTaskFailure(
+                    f"Injected failure on attempt {self.request.retries + 1} "
+                    f"of {config.TASK_FAILURE_INJECTION_COUNT}"
+                )
             outcome = await run_claimed_request(
                 raw_query, uuid.UUID(request_id), recursion_limit
             )
@@ -65,3 +183,23 @@ def generate_report(raw_query: str, request_id: str, recursion_limit: int = 20) 
             await dispose_engine()
 
     return asyncio.run(_run())
+
+
+@celery_app.task(name="worker.dead_letter")
+def dead_letter(task_id: str, raw_query: str, request_id: str, error_message: str) -> dict:
+    """The poison-message parking lot generate_report.on_failure() routes to,
+    via a dedicated queue (config.DEAD_LETTER_QUEUE_NAME), once max_retries
+    is exhausted. Nothing consumes this queue automatically - no worker here
+    is ever subscribed to it - so a message landing on it just sits in
+    Redis for a human to inspect or decide whether to manually replay.
+    Keeping the original payload (raw_query, request_id), not just an error
+    string, is what makes that replay decision possible at all: without
+    them, a poison message would carry only the fact that something failed,
+    not enough to act on it. This task exists mainly so the payload has a
+    registered, named place to go; it isn't expected to actually execute in
+    normal operation."""
+    logger.error(
+        "\U0001f480 Dead-lettered task=%s request_id=%s error=%s",
+        task_id, request_id, error_message,
+    )
+    return {"task_id": task_id, "request_id": request_id, "error": error_message}
