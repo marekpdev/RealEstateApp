@@ -48,6 +48,20 @@ jobs:
       - name: Set up Python
         run: uv python install
 
+      # The pytest suite's own db_engine fixture creates and migrates a
+      # separate <db>_test database for tests that need transaction-per-test
+      # isolation (see tests/conftest.py) - it never touches this plain
+      # POSTGRES_DSN database. Some tests (worker/Celery tests that exercise
+      # a real embedded worker on its own thread) can't safely share that
+      # fixture's single rebound connection, so they write to this database
+      # directly instead - which on a fresh CI Postgres service has no
+      # tables at all until migrated here, once, up front.
+      - name: Run database migrations
+        run: uv run python -m alembic upgrade head
+        env:
+          PYTHONPATH: .
+          POSTGRES_DSN: postgresql+asyncpg://realestateapp:realestateapp@localhost:5432/realestateapp
+
       - name: Run tests
         run: uv run pytest
         env:
