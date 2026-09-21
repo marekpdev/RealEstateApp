@@ -48,6 +48,38 @@ celery_app.conf.update(
     # finishes (a caller polling for status); without an expiry they'd
     # accumulate in Redis forever.
     result_expires=3600,
+    # Both settings below are already Celery's own defaults as of 5.6 -
+    # pinned explicitly, with the reasoning written down, so a future
+    # Celery upgrade can't silently change this app's shutdown behaviour
+    # and so the choice reads as deliberate rather than accidental.
+    #
+    # A worker that loses its broker connection mid-task (a Redis restart,
+    # a network blip) does NOT abort whatever it's currently running - it
+    # keeps executing and only the next broker interaction (acking,
+    # fetching new work) is affected. The alternative (True) exists mainly
+    # for brokers/setups where a lost connection means a task's eventual
+    # ack can never land anyway; that's not this app's failure mode, and
+    # aborting a multi-minute graph run over a connection blip it would
+    # otherwise have recovered from is strictly worse than letting it finish.
+    worker_cancel_long_running_tasks_on_connection_loss=False,
+    # Celery 5.5+'s "soft shutdown": on a warm shutdown (one SIGTERM), wait
+    # at most this many seconds for in-flight tasks before forcing a cold
+    # shutdown anyway. 0 (the default) disables it entirely, so a warm
+    # shutdown waits for the in-flight task with no internal ceiling of its
+    # own. That's deliberate, not an oversight: task_acks_late=True above
+    # exists specifically so this app never loses a run to a worker that
+    # exits mid-task, and giving Celery its own internal timeout would
+    # reintroduce exactly that risk from a second, harder-to-see angle.
+    # The actual ceiling on how long a warm shutdown is allowed to take
+    # belongs one level up, in the orchestrator that sends the signal -
+    # Kubernetes' terminationGracePeriodSeconds, or Compose's
+    # stop_grace_period (see docker-compose.yml's worker service and
+    # k8s/deployment.yaml) - which forcibly SIGKILLs the process if it
+    # overruns. Keeping the ceiling in exactly one place, set by whatever
+    # actually sends the signal, is simpler to reason about than letting
+    # Celery and the orchestrator each enforce their own, possibly
+    # conflicting, deadline.
+    worker_soft_shutdown_timeout=0,
 )
 
 celery_app.conf.beat_schedule = {

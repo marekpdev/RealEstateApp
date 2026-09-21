@@ -40,6 +40,18 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+    # Compose's own name for what Kubernetes calls terminationGracePeriodSeconds
+    # (see k8s/deployment.yaml): how long `docker compose stop`/`down` waits
+    # after SIGTERM before SIGKILL-ing the container. Without this, Compose's
+    # 10s default would kill a Chainlit session's poll_until_terminal() wait
+    # (config.REPORT_POLL_TIMEOUT_SECONDS, 300s by default) long before it
+    # could ever finish on its own - uvicorn itself waits indefinitely for
+    # in-flight connections to drain (its own timeout_graceful_shutdown
+    # defaults to None), so this is the only actual ceiling in play. Sized
+    # to REPORT_POLL_TIMEOUT_SECONDS plus headroom for uvicorn/lifespan
+    # teardown, not to a task duration - the API process itself never runs
+    # the graph (the worker does); it only ever waits on one.
+    stop_grace_period: 330s
     volumes:
       - .:/app
       - /app/.venv
@@ -87,6 +99,20 @@ services:
     image: realestateapp:local
     container_name: realestateapp_worker
     command: ["uv", "run", "celery", "-A", "worker.celery_app", "worker", "--loglevel=info"]
+    # How long `docker compose stop`/`down` waits after SIGTERM before
+    # SIGKILL-ing this container - Compose's equivalent of Kubernetes'
+    # terminationGracePeriodSeconds. Celery's own warm shutdown (see
+    # worker/celery_app.py's worker_soft_shutdown_timeout=0) waits
+    # indefinitely for the in-flight generate_report task on a single
+    # SIGTERM, so without a grace period long enough to cover that,
+    # Compose's 10s default would SIGKILL the worker mid-task - the exact
+    # "job stuck in RUNNING forever" failure mode this phase exists to
+    # avoid. There's no separate task_time_limit configured for
+    # generate_report, so REPORT_POLL_TIMEOUT_SECONDS (the app's own
+    # existing definition of "how long a job is allowed to take", used by
+    # app.py/cli.py's poll_until_terminal()) is the closest real signal for
+    # sizing this, plus headroom for the task's own cleanup.
+    stop_grace_period: 330s
     depends_on:
       redis:
         condition: service_healthy
