@@ -14,6 +14,18 @@ spec:
       labels:
         app: realestateapp
     spec:
+      # Kubernetes sends SIGTERM, then waits this many seconds before
+      # SIGKILL-ing anything still running (pod deletion, rolling update,
+      # node drain - the same sequence either way). The default (30s)
+      # would kill a Chainlit user's in-flight poll_until_terminal() wait
+      # (config.REPORT_POLL_TIMEOUT_SECONDS, 300s by default) well before
+      # it could finish on its own - uvicorn itself places no ceiling of
+      # its own on graceful shutdown (timeout_graceful_shutdown defaults to
+      # None, i.e. wait for connections to drain), so this is the only
+      # actual limit in play. Sized to REPORT_POLL_TIMEOUT_SECONDS plus
+      # headroom for uvicorn/lifespan teardown to run after connections
+      # close - see docker-compose.yml's matching stop_grace_period.
+      terminationGracePeriodSeconds: 330
       containers:
       - name: realestateapp-container
         image: ghcr.io/marekpdev/realestateapp:latest

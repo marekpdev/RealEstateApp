@@ -29,7 +29,17 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("SELECT 1"))
 
     yield
-    # Server Tear Down Sequence
+    # Server Tear Down Sequence. Reached on SIGTERM/SIGINT, not just a
+    # normal exit: uvicorn's own signal handlers stop it accepting new
+    # connections, wait for in-flight ones (including a Chainlit
+    # websocket session mid poll_until_terminal()) to close on their own -
+    # indefinitely, since timeout_graceful_shutdown defaults to None - and
+    # only then run this code. No SIGTERM handling of our own is needed
+    # here; the actual ceiling on how long uvicorn will wait lives one
+    # level up, in whatever sends the signal (k8s's
+    # terminationGracePeriodSeconds / Compose's stop_grace_period - see
+    # k8s/deployment.yaml and docker-compose.yml), which SIGKILLs the
+    # process outright once its grace period elapses, graceful or not.
     await async_client_pool.aclose()
     if config.DB_PERSISTENCE_ENABLED:
         await dispose_engine()
