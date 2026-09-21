@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 
+import redis
 from celery import Task
 from celery.utils.log import get_task_logger
 
@@ -9,9 +10,24 @@ from db.enums import JobStatus
 from db.repositories import InvestmentRequestRepository
 from db.session import dispose_engine, session_scope
 from orchestration.run_recorder import run_claimed_request
+from scripts.sync_knowledge_base import sync_azure_to_pinecone
 from worker.celery_app import celery_app
 
 logger = get_task_logger(__name__)
+
+_SYNC_KNOWLEDGE_BASE_LOCK_KEY = "lock:sync_knowledge_base"
+# Atomic compare-and-delete: only unlocks if the value still matches the
+# token *this* call set. A plain DEL here would risk one run deleting a
+# lock a different, later run went on to legitimately acquire after this
+# run's own TTL already expired it first - the standard unsafe-unlock bug
+# in a naively implemented Redis lock.
+_RELEASE_LOCK_IF_OWNER_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
 
 
 class SimulatedTaskFailure(Exception):
@@ -203,3 +219,55 @@ def dead_letter(task_id: str, raw_query: str, request_id: str, error_message: st
         task_id, request_id, error_message,
     )
     return {"task_id": task_id, "request_id": request_id, "error": error_message}
+
+
+@celery_app.task(name="worker.sync_knowledge_base")
+def sync_knowledge_base() -> dict:
+    """Celery Beat's scheduled entrypoint (worker/celery_app.py's
+    beat_schedule) for scripts.sync_knowledge_base.sync_azure_to_pinecone().
+    Deliberately thin, the same shape as generate_report: the actual
+    ingestion logic lives in the script, not here, so it stays independently
+    testable and directly runnable (`uv run python -m scripts.sync_knowledge_base`)
+    without a Celery worker at all - Celery orchestrates *when* this runs,
+    the script defines *what* running it means.
+
+    Guarded against overlapping runs by a Redis lock (SET NX EX - the
+    standard single-instance distributed-lock pattern), not just "assume
+    Beat only ever fires one instance": Beat's own schedule can legitimately
+    fire again before a slow real sync finishes (a short interval, a stalled
+    Azure download), and nothing about Celery/Redis prevents two worker
+    processes from consuming two such deliveries concurrently. Without the
+    lock, two concurrent syncs would each list/chunk/embed the same PDFs and
+    double-upsert into Pinecone - wasted paid embedding calls, and, if Azure
+    returns a different partial blob listing to each run, no straightforward
+    way to reason about which run's data actually ended up in the vector
+    store. A per-request idempotency key (generate_report's own tool for
+    the report-generation path) doesn't apply here: there's no per-invocation
+    identity to dedupe on, since every scheduled firing means the same
+    thing ("resync everything currently in Azure") - the property this task
+    actually needs is mutual exclusion between overlapping runs, which is
+    exactly what a lock provides and idempotency doesn't.
+    """
+    client = redis.Redis.from_url(config.REDIS_URL)
+    lock_token = uuid.uuid4().hex
+    try:
+        acquired = client.set(
+            _SYNC_KNOWLEDGE_BASE_LOCK_KEY,
+            lock_token,
+            nx=True,
+            ex=config.KNOWLEDGE_BASE_SYNC_LOCK_TTL_SECONDS,
+        )
+        if not acquired:
+            logger.info(
+                "worker.sync_knowledge_base skipped: a sync is already in progress"
+            )
+            return {"skipped": True, "reason": "lock held by another run"}
+
+        try:
+            result = sync_azure_to_pinecone()
+            logger.info("worker.sync_knowledge_base finished: %s", result)
+            return result
+        finally:
+            client.eval(_RELEASE_LOCK_IF_OWNER_SCRIPT, 1, _SYNC_KNOWLEDGE_BASE_LOCK_KEY, lock_token)
+    finally:
+        client.close()

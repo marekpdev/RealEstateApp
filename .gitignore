@@ -60,6 +60,10 @@ logs/
 # redis-server (e.g. verifying the worker outside Docker Compose).
 *.rdb
 
+# Celery Beat's PersistentScheduler writes its "last run" bookkeeping here
+# by default (e.g. verifying `celery ... beat` outside Docker Compose).
+celerybeat-schedule*
+
 # Chainlit auto-generated assets and translation files
 .chainlit/*
 !.chainlit/config.toml

@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import redis
 from celery.contrib.testing.worker import start_worker
 from sqlalchemy import delete, select
 
@@ -16,7 +17,13 @@ from db.repositories import InvestmentRequestRepository
 from db.session import dispose_engine, session_scope
 from orchestration.run_recorder import RunOutcome
 from worker.celery_app import celery_app
-from worker.tasks import SimulatedTaskFailure, generate_report, ping
+from worker.tasks import (
+    SimulatedTaskFailure,
+    _SYNC_KNOWLEDGE_BASE_LOCK_KEY,
+    generate_report,
+    ping,
+    sync_knowledge_base,
+)
 
 
 async def _create_real_request_row() -> uuid.UUID:
@@ -379,3 +386,96 @@ def test_generate_report_redelivery_short_circuits_without_rerunning_graph(offli
 # decides an attempt is final) plus a one-time manual verification against
 # a real, standalone `celery worker` process - see this phase's learning
 # document for the transcript.
+
+
+def test_beat_schedule_registers_sync_knowledge_base():
+    """Asserted directly on the config dict Celery Beat itself reads, the
+    same style as test_generate_report_configured_with_retry_backoff_and_jitter
+    above - proving the schedule is actually wired up regardless of whether
+    a real Beat process ever runs in this test suite."""
+    entry = celery_app.conf.beat_schedule["sync-knowledge-base"]
+    assert entry["task"] == "worker.sync_knowledge_base"
+    assert entry["schedule"] == config.KNOWLEDGE_BASE_SYNC_SCHEDULE_SECONDS
+
+
+@pytest.fixture
+def _real_redis_client():
+    """A real Redis connection, never a mock - the same posture this project
+    already takes for Postgres: a mocked client cannot verify a real SET NX
+    EX race or a real Lua compare-and-delete."""
+    client = redis.Redis.from_url(config.REDIS_URL)
+    client.delete(_SYNC_KNOWLEDGE_BASE_LOCK_KEY)
+    try:
+        yield client
+    finally:
+        client.delete(_SYNC_KNOWLEDGE_BASE_LOCK_KEY)
+        client.close()
+
+
+def test_sync_knowledge_base_task_wraps_sync_azure_to_pinecone(_real_redis_client):
+    fake_result = {"documents_scanned": 1, "chunks_synced": 3, "mocked": False}
+    with patch(
+        "worker.tasks.sync_azure_to_pinecone", return_value=fake_result
+    ) as mock_sync:
+        result = sync_knowledge_base()
+
+    mock_sync.assert_called_once_with()
+    assert result == fake_result
+
+
+def test_sync_knowledge_base_skips_when_lock_already_held(_real_redis_client):
+    """Simulates a Beat-fired invocation arriving while a prior run is still
+    in flight: something else already holds the lock, so this call must not
+    touch sync_azure_to_pinecone at all, and must not clear a lock it never
+    acquired (the other run's lock survives this call untouched)."""
+    _real_redis_client.set(_SYNC_KNOWLEDGE_BASE_LOCK_KEY, "someone-elses-token", ex=60)
+
+    with patch("worker.tasks.sync_azure_to_pinecone") as mock_sync:
+        result = sync_knowledge_base()
+
+    mock_sync.assert_not_called()
+    assert result == {"skipped": True, "reason": "lock held by another run"}
+    assert _real_redis_client.get(_SYNC_KNOWLEDGE_BASE_LOCK_KEY) == b"someone-elses-token"
+
+
+def test_sync_knowledge_base_releases_its_own_lock_after_a_successful_run(
+    _real_redis_client,
+):
+    with patch(
+        "worker.tasks.sync_azure_to_pinecone",
+        return_value={"documents_scanned": 0, "chunks_synced": 0, "mocked": False},
+    ):
+        sync_knowledge_base()
+
+    assert _real_redis_client.get(_SYNC_KNOWLEDGE_BASE_LOCK_KEY) is None
+
+
+def test_sync_knowledge_base_releases_its_own_lock_even_if_the_sync_raises(
+    _real_redis_client,
+):
+    """The lock must not survive a failed sync either, or every subsequent
+    Beat firing would be skipped forever after one bad run."""
+    with patch(
+        "worker.tasks.sync_azure_to_pinecone", side_effect=RuntimeError("boom")
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            sync_knowledge_base()
+
+    assert _real_redis_client.get(_SYNC_KNOWLEDGE_BASE_LOCK_KEY) is None
+
+
+def test_sync_knowledge_base_round_trips_through_real_redis(celery_worker_process):
+    """Same mechanism proof as the ping/generate_report round-trip tests
+    above: the task is correctly registered under worker.sync_knowledge_base
+    and runs to completion through a real broker and a real embedded
+    worker. sync_azure_to_pinecone is left unmocked deliberately - in this
+    sandbox MOCK_KNOWLEDGE_BASE_SYNC/OFFLINE_MODE are false by default
+    (see .env.example), and this test does not assume either is set, so it
+    patches the flag directly rather than relying on environment state."""
+    with patch("scripts.sync_knowledge_base.MOCK_KNOWLEDGE_BASE_SYNC", True):
+        result = sync_knowledge_base.delay()
+        assert result.get(timeout=10) == {
+            "documents_scanned": 2,
+            "chunks_synced": 6,
+            "mocked": True,
+        }

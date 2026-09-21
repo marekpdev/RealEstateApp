@@ -124,5 +124,34 @@ services:
       - DEAD_LETTER_QUEUE_NAME
       - TASK_FAILURE_INJECTION_COUNT
 
+  beat:
+    build: .
+    image: realestateapp:local
+    container_name: realestateapp_beat
+    # A separate process from `worker` on purpose (see the phase's learning
+    # document for the full reasoning): Beat only reads worker/celery_app.py's
+    # beat_schedule and, on interval, calls apply_async() by task name - it
+    # never imports worker.tasks or executes a task body itself, so it needs
+    # none of the Postgres/vendor credentials the worker service below does.
+    # Exactly one replica, always - two Beat processes would each
+    # independently fire the same schedule, duplicating every scheduled task
+    # (the overlapping-run lock in worker.sync_knowledge_base guards against
+    # concurrent *task* execution, not against a second *scheduler*
+    # duplicating deliveries in the first place).
+    command: ["uv", "run", "celery", "-A", "worker.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - KNOWLEDGE_BASE_SYNC_SCHEDULE_SECONDS
+
 volumes:
   postgres_data:

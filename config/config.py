@@ -63,6 +63,25 @@ DEAD_LETTER_QUEUE_NAME = os.getenv("DEAD_LETTER_QUEUE_NAME", "dead_letter")
 # without actually breaking Postgres or Redis. See worker/tasks.py.
 TASK_FAILURE_INJECTION_COUNT = int(os.getenv("TASK_FAILURE_INJECTION_COUNT", "0"))
 
+# How often (seconds) Celery Beat re-enqueues worker.sync_knowledge_base
+# (worker/celery_app.py's beat_schedule). A plain number is interpreted by
+# Celery as a timedelta in seconds. Real zoning PDFs in Azure Blob Storage
+# change on the order of days, not seconds - the 6-hour default reflects
+# that - but it's an env var specifically so a short interval (e.g. 10) can
+# be set for local/CI verification without editing code.
+KNOWLEDGE_BASE_SYNC_SCHEDULE_SECONDS = float(
+    os.getenv("KNOWLEDGE_BASE_SYNC_SCHEDULE_SECONDS", "21600")
+)
+# TTL (seconds) on the Redis lock worker.sync_knowledge_base holds for the
+# duration of one sync, so a run that overlaps its own still-running
+# predecessor (a short schedule, or two Beat-fed workers) is a no-op instead
+# of a second concurrent ingest. Also the safety net if a worker dies while
+# holding the lock: the lock self-expires instead of wedging every future
+# run forever. Must comfortably exceed how long a real sync can take.
+KNOWLEDGE_BASE_SYNC_LOCK_TTL_SECONDS = int(
+    os.getenv("KNOWLEDGE_BASE_SYNC_LOCK_TTL_SECONDS", "1800")
+)
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
@@ -82,3 +101,10 @@ MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT = OFFLINE_MODE or get_env_bool("MOCK_NEIGHBO
 MOCK_ZONING_LAW_AGENT_OUTPUT = OFFLINE_MODE or get_env_bool("MOCK_ZONING_LAW_AGENT_OUTPUT")
 
 MOCK_MARKET_DATA_API = OFFLINE_MODE or get_env_bool("MOCK_MARKET_DATA_API")
+
+# Mirrors the per-agent MOCK_*_AGENT_OUTPUT pattern above: short-circuits
+# scripts.sync_knowledge_base.sync_azure_to_pinecone() to a deterministic,
+# zero-network summary instead of touching Azure Blob Storage, OpenAI
+# embeddings and Pinecone for real. OFFLINE_MODE implies this too, so a
+# scheduled Beat run never costs money unless explicitly taken online.
+MOCK_KNOWLEDGE_BASE_SYNC = OFFLINE_MODE or get_env_bool("MOCK_KNOWLEDGE_BASE_SYNC")
