@@ -49,3 +49,16 @@ celery_app.conf.update(
     # accumulate in Redis forever.
     result_expires=3600,
 )
+
+celery_app.conf.beat_schedule = {
+    # Celery Beat's own scheduler process reads this dict and calls
+    # apply_async() by task name on the configured interval - it never
+    # imports or runs worker.tasks itself (see the "beat" service in
+    # docker-compose.yml, which starts a `celery ... beat` process with no
+    # Postgres/vendor credentials at all: it only needs the broker). A
+    # plain number here is interpreted by Celery as a timedelta in seconds.
+    "sync-knowledge-base": {
+        "task": "worker.sync_knowledge_base",
+        "schedule": config.KNOWLEDGE_BASE_SYNC_SCHEDULE_SECONDS,
+    },
+}
