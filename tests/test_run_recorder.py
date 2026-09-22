@@ -10,7 +10,12 @@ from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from db.models import AgentRun, InvestmentRequest, Report
 from db.repositories import InvestmentRequestRepository, ReportRepository
-from orchestration.run_recorder import execute_and_record, poll_until_terminal, run_claimed_request
+from orchestration.run_recorder import (
+    claim_request,
+    execute_and_record,
+    poll_until_terminal,
+    run_claimed_request,
+)
 
 
 def _unique_key() -> str:
@@ -41,6 +46,49 @@ async def _run(raw_query: str, key: str):
         return await execute_and_record(
             raw_query, user_id=DEMO_USER_ID, idempotency_key=key, recursion_limit=20
         )
+
+
+@pytest.mark.asyncio
+async def test_claim_request_fresh_key_is_created_with_no_conflict(db_session):
+    key = _unique_key()
+
+    claim = await claim_request(DEMO_USER_ID, key, "Invest in Austin, TX")
+
+    assert claim.created is True
+    assert claim.should_run is True
+    assert claim.payload_conflict is False
+    assert claim.status == JobStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_claim_request_same_key_same_payload_is_a_replay_with_no_conflict(db_session):
+    key = _unique_key()
+    first = await claim_request(DEMO_USER_ID, key, "Invest in Austin, TX")
+
+    second = await claim_request(DEMO_USER_ID, key, "Invest in Austin, TX")
+
+    assert second.request_id == first.request_id
+    assert second.created is False
+    assert second.payload_conflict is False
+
+
+@pytest.mark.asyncio
+async def test_claim_request_same_key_different_payload_flags_conflict(db_session):
+    """The distinction the HTTP API acts on: reusing an idempotency key for
+    a genuinely different request is a client error, not a replay -
+    claim_request() surfaces that as payload_conflict rather than silently
+    replaying the original job under the new request's query."""
+    key = _unique_key()
+    first = await claim_request(DEMO_USER_ID, key, "Invest in Austin, TX")
+
+    second = await claim_request(DEMO_USER_ID, key, "Invest in a totally different city")
+
+    assert second.request_id == first.request_id
+    assert second.created is False
+    assert second.payload_conflict is True
+    # should_run is unaffected by the conflict - it's the caller's job to
+    # check payload_conflict first and refuse to act on should_run at all.
+    assert second.should_run is True
 
 
 @pytest.mark.asyncio

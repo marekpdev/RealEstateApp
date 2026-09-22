@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, NamedTuple, Optional, Set, Tuple
 
 from langchain_core.messages import HumanMessage
 
@@ -13,6 +13,7 @@ from db.repositories import (
     AgentRunRepository,
     InvestmentRequestRepository,
     ReportRepository,
+    hash_request_payload,
 )
 from db.session import session_scope
 from graph import NODE_REGISTRY, compiledStateGraph
@@ -31,6 +32,28 @@ class RunOutcome:
     status: JobStatus
     report: Optional[Report]
     replayed: bool
+
+
+class ClaimResult(NamedTuple):
+    """What claim_request() hands back. `created` distinguishes a genuinely
+    new job (this call's own INSERT won the idempotent claim) from a
+    replay of a pre-existing row for the same (user_id, idempotency_key) -
+    the HTTP API uses it to answer 202 (new) vs 200 (replay). `status` is
+    the row's current status either way, so a replay response can report
+    the truth instead of assuming PENDING. `payload_conflict` is True only
+    when a pre-existing row's stored request_payload_hash doesn't match
+    this call's own raw_query - the same idempotency key reused for a
+    genuinely different request, which the HTTP API turns into a 409.
+    app.py/cli.py's own idempotency keys (a Chainlit message id, a fresh
+    uuid4 per CLI invocation) are never deliberately reused with a
+    different payload, so they ignore this field entirely and always
+    replay regardless of it."""
+
+    request_id: uuid.UUID
+    status: JobStatus
+    should_run: bool
+    created: bool
+    payload_conflict: bool
 
 
 async def execute_and_record(
@@ -59,13 +82,15 @@ async def execute_and_record(
     agents/ or graph.py's node bodies - db/ must never be imported by
     agents/, so persistence stays a concern this module owns from outside.
     """
-    request_id, should_run = await claim_request(user_id, idempotency_key)
-    if not should_run:
-        return await get_replayed_outcome(request_id)
-    return await run_claimed_request(raw_query, request_id, recursion_limit)
+    claim = await claim_request(user_id, idempotency_key, raw_query)
+    if not claim.should_run:
+        return await get_replayed_outcome(claim.request_id)
+    return await run_claimed_request(raw_query, claim.request_id, recursion_limit)
 
 
-async def claim_request(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.UUID, bool]:
+async def claim_request(
+    user_id: uuid.UUID, idempotency_key: str, raw_query: str
+) -> ClaimResult:
     """One short transaction, entirely separate from the run that may
     follow. city/budget aren't known yet - the graph hasn't run a single
     node - so the claiming insert writes them as empty strings;
@@ -90,15 +115,30 @@ async def claim_request(user_id: uuid.UUID, idempotency_key: str) -> Tuple[uuid.
     worker/tasks.py's generate_report), and start polling for it, all
     without waiting for the run itself to even begin.
 
-    Returns (request_id, should_run).
+    raw_query is hashed and compared against a pre-existing row's own
+    stored hash (ClaimResult.payload_conflict) whenever this call is a
+    replay (created=False) - see create_idempotent()'s own docstring on
+    why that comparison lives here rather than in the repository.
+
+    Returns a ClaimResult.
     """
     async with session_scope() as session:
         request, created = await InvestmentRequestRepository(session).create_idempotent(
-            user_id=user_id, idempotency_key=idempotency_key, city="", budget=""
+            user_id=user_id, idempotency_key=idempotency_key, raw_query=raw_query, city="", budget=""
         )
         request_id = request.id
-        already_completed = (not created) and request.status == JobStatus.COMPLETED
-    return request_id, not already_completed
+        request_status = request.status
+        already_completed = (not created) and request_status == JobStatus.COMPLETED
+        payload_conflict = (
+            not created and request.request_payload_hash != hash_request_payload(raw_query)
+        )
+    return ClaimResult(
+        request_id=request_id,
+        status=request_status,
+        should_run=not already_completed,
+        created=created,
+        payload_conflict=payload_conflict,
+    )
 
 
 async def get_replayed_outcome(request_id: uuid.UUID) -> RunOutcome:

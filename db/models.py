@@ -70,6 +70,15 @@ class InvestmentRequest(Base):
         nullable=False,
     )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    # SHA-256 hex digest of the free-text query this key was first claimed
+    # with (see InvestmentRequestRepository.create_idempotent()), captured
+    # at claim time rather than derived later - the raw query itself is
+    # never persisted as a column, only this fixed-size fingerprint of it.
+    # A caller reusing this same idempotency_key later can be compared
+    # against it to tell a genuine replay (same hash) from a conflicting
+    # reuse of the key for a different request (a different hash) - the
+    # HTTP API is the only caller that currently acts on that distinction.
+    request_payload_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     status: Mapped[JobStatus] = mapped_column(job_status_enum, nullable=False)
     # Both extracted by ingest_input_agent as free text (schema/state.py's
     # IngestInputAgentOutput), not parsed numbers - "$500k" is a valid budget

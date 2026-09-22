@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from typing import List, Optional, Tuple
 
@@ -7,6 +8,16 @@ from sqlalchemy.exc import IntegrityError
 from db.enums import JobStatus
 from db.models import InvestmentRequest
 from db.repositories.base import BaseRepository
+
+
+def hash_request_payload(raw_query: str) -> str:
+    """SHA-256 hex digest of the free-text query a caller submitted.
+    create_idempotent() stores this alongside the idempotency key it's
+    claimed with, and a later caller reusing the same key can hash its own
+    raw_query the same way to check whether it matches what the key was
+    first used for - a fixed-size fingerprint rather than persisting the
+    raw text a second time as its own column."""
+    return hashlib.sha256(raw_query.encode("utf-8")).hexdigest()
 
 
 class InvestmentRequestRepository(BaseRepository):
@@ -60,6 +71,7 @@ class InvestmentRequestRepository(BaseRepository):
         *,
         user_id: uuid.UUID,
         idempotency_key: str,
+        raw_query: str,
         city: str,
         budget: str,
         status: JobStatus = JobStatus.PENDING,
@@ -72,6 +84,15 @@ class InvestmentRequestRepository(BaseRepository):
         the database itself, via the constraint it already enforces on every
         write, can arbitrate atomically across two genuinely concurrent
         transactions.
+
+        raw_query is hashed (hash_request_payload()) and stored as
+        request_payload_hash on insert - not compared against on a
+        conflict here. Whether a replay's raw_query actually matches what
+        the key was first used for is the caller's decision (see
+        orchestration.run_recorder.claim_request()'s payload_conflict),
+        not this method's: app.py/cli.py's own idempotency keys (a Chainlit
+        message id, a fresh uuid4 per CLI invocation) replay regardless of
+        payload by design, and only the HTTP API acts on a mismatch.
 
         Returns (row, created) - created=False means a row for this
         (user_id, idempotency_key) already existed and this call is a
@@ -86,6 +107,7 @@ class InvestmentRequestRepository(BaseRepository):
         request = InvestmentRequest(
             user_id=user_id,
             idempotency_key=idempotency_key,
+            request_payload_hash=hash_request_payload(raw_query),
             status=status,
             city=city,
             budget=budget,

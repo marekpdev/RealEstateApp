@@ -74,11 +74,17 @@ async def client():
         yield ac
 
 
+def _idempotency_headers(label: str = "idem") -> dict:
+    return {"Idempotency-Key": f"{label}-{uuid.uuid4()}"}
+
+
 @pytest.mark.asyncio
 async def test_create_report_returns_202_with_job_id_and_status_url(db_session, client):
     with patch("api.v1.reports.generate_report") as mock_task:
         response = await client.post(
-            "/api/v1/reports", json={"query": "Invest in Austin, TX up to $750,000"}
+            "/api/v1/reports",
+            json={"query": "Invest in Austin, TX up to $750,000"},
+            headers=_idempotency_headers(),
         )
 
     assert response.status_code == 202
@@ -91,14 +97,70 @@ async def test_create_report_returns_202_with_job_id_and_status_url(db_session, 
 
 @pytest.mark.asyncio
 async def test_create_report_rejects_empty_query_with_422(db_session, client):
-    response = await client.post("/api/v1/reports", json={"query": ""})
+    response = await client.post(
+        "/api/v1/reports", json={"query": ""}, headers=_idempotency_headers()
+    )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_create_report_rejects_missing_query_with_422(db_session, client):
-    response = await client.post("/api/v1/reports", json={})
+    response = await client.post(
+        "/api/v1/reports", json={}, headers=_idempotency_headers()
+    )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_report_rejects_missing_idempotency_key_with_422(db_session, client):
+    response = await client.post(
+        "/api/v1/reports", json={"query": "Invest in Austin, TX up to $750,000"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_report_same_key_same_payload_replays_with_200(db_session, client):
+    headers = _idempotency_headers()
+    body_payload = {"query": "Invest in Austin, TX up to $750,000"}
+    with patch("api.v1.reports.generate_report") as mock_task:
+        first = await client.post("/api/v1/reports", json=body_payload, headers=headers)
+        second = await client.post("/api/v1/reports", json=body_payload, headers=headers)
+
+    assert first.status_code == 202
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["status_url"] == first.json()["status_url"]
+    # The replay still re-enqueues: the job is only ever claimed once (one
+    # row, one id), but its status is still PENDING in this test (nothing
+    # ever runs generate_report.delay's mocked-out continuation), so
+    # should_run is True both times - safe, since the worker's own
+    # try_claim_run() atomically refuses a second physical run of a job
+    # another attempt already owns or finished (see
+    # orchestration/run_recorder.py's run_claimed_request()).
+    assert mock_task.delay.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_create_report_same_key_different_payload_returns_409(db_session, client):
+    headers = _idempotency_headers()
+    with patch("api.v1.reports.generate_report") as mock_task:
+        first = await client.post(
+            "/api/v1/reports",
+            json={"query": "Invest in Austin, TX up to $750,000"},
+            headers=headers,
+        )
+        second = await client.post(
+            "/api/v1/reports",
+            json={"query": "Invest in a completely different city"},
+            headers=headers,
+        )
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    # The conflicting call must not touch the job at all - no second claim,
+    # no second enqueue.
+    mock_task.delay.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -124,7 +186,9 @@ async def test_full_round_trip_create_then_fetch_completed_report(
     with _inline_generate_report() as pending_run:
         async with respx.mock:
             create_response = await client.post(
-                "/api/v1/reports", json={"query": "Invest in Austin, TX up to $900,000"}
+                "/api/v1/reports",
+                json={"query": "Invest in Austin, TX up to $900,000"},
+                headers=_idempotency_headers(),
             )
             assert create_response.status_code == 202
             job_id = create_response.json()["id"]
@@ -154,6 +218,7 @@ async def test_list_reports_is_paginated_and_newest_first(db_session, client):
         request, _ = await repo.create_idempotent(
             user_id=DEMO_USER_ID,
             idempotency_key=f"list-test-{uuid.uuid4()}",
+            raw_query=f"Invest in City {i}",
             city=f"City {i}",
             budget="$1",
             status=JobStatus.PENDING,
@@ -176,7 +241,9 @@ async def test_list_reports_is_paginated_and_newest_first(db_session, client):
 @pytest.mark.asyncio
 async def test_reports_endpoints_return_503_when_persistence_disabled(client):
     with patch("api.v1.reports.config.DB_PERSISTENCE_ENABLED", False):
-        response = await client.post("/api/v1/reports", json={"query": "x"})
+        response = await client.post(
+            "/api/v1/reports", json={"query": "x"}, headers=_idempotency_headers()
+        )
     assert response.status_code == 503
 
 

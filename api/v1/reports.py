@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
 
 from api.v1.schemas import (
     ReportAccepted,
@@ -20,6 +20,8 @@ from orchestration.run_recorder import claim_request
 from worker.tasks import generate_report
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 
 def _require_persistence() -> None:
@@ -43,31 +45,68 @@ def _require_persistence() -> None:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit an investment analysis request",
     description=(
-        "Enqueues a new report-generation job and returns immediately with "
-        "its job id and a status URL to poll. Every call creates a brand-new "
-        "job right now - this endpoint does not yet accept an Idempotency-Key "
-        "header, so a retried identical request is not deduplicated here."
+        "Enqueues a new report-generation job. Requires an `Idempotency-Key` "
+        "header, scoped per user: reusing a key with the *same* request body "
+        "is a safe replay - no new work is done, and the response is `200` "
+        "with the original job's current status. Reusing a key with a "
+        "*different* request body is rejected with `409`, since the key no "
+        "longer unambiguously identifies one request. A key not seen before "
+        "always creates a new job and returns `202` with its job id and a "
+        "status URL to poll."
     ),
+    responses={
+        200: {
+            "model": ReportAccepted,
+            "description": (
+                "Replay: this Idempotency-Key was already used with the same "
+                "request body. No new job was created or enqueued."
+            ),
+        },
+        409: {
+            "description": (
+                "Idempotency-Key already used with a different request body"
+            )
+        },
+    },
 )
 async def create_report(
-    payload: ReportCreateRequest, request: Request, response: Response
+    payload: ReportCreateRequest,
+    request: Request,
+    response: Response,
+    idempotency_key: str = Header(
+        ...,
+        alias=IDEMPOTENCY_KEY_HEADER,
+        min_length=1,
+        max_length=255,
+        description=(
+            "A client-generated key unique to this logical request. Reuse it "
+            "unchanged to safely retry the same request; a fresh UUID per "
+            "genuinely new request is the usual choice."
+        ),
+    ),
 ) -> ReportAccepted:
     _require_persistence()
-    # No client-supplied idempotency key exists at this boundary yet - a
-    # fresh key per call, exactly like cli.py's own per-invocation
-    # uuid.uuid4(), is what makes every POST its own job instead of
-    # colliding with (and silently replaying) a previous one.
-    idempotency_key = str(uuid.uuid4())
-    request_id, should_run = await claim_request(DEMO_USER_ID, idempotency_key)
-    if should_run:
-        generate_report.delay(payload.query, str(request_id), 20)
-    status_url = str(request.url_for("get_report", request_id=request_id))
+    claim = await claim_request(DEMO_USER_ID, idempotency_key, payload.query)
+    if claim.payload_conflict:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Idempotency-Key already used with a different request body.",
+        )
+    if claim.should_run:
+        generate_report.delay(payload.query, str(claim.request_id), 20)
+    status_url = str(request.url_for("get_report", request_id=claim.request_id))
     # A Location header, not just the same URL in the body: standard
     # practice for a 202/201 pointing at where to check on the accepted
     # work, and free to set alongside a body a client may prefer to parse
     # instead.
     response.headers["Location"] = status_url
-    return ReportAccepted(id=request_id, status=JobStatus.PENDING, status_url=status_url)
+    # created=True means this call's own INSERT won the claim (a genuinely
+    # new job, 202); created=False means an existing row for this key was
+    # found and this response replays it - no new work was done, 200.
+    response.status_code = (
+        status.HTTP_202_ACCEPTED if claim.created else status.HTTP_200_OK
+    )
+    return ReportAccepted(id=claim.request_id, status=claim.status, status_url=status_url)
 
 
 @router.get(
