@@ -18,11 +18,15 @@ from db.session import session_scope
 # checking for None ourselves is what makes "no header at all" answer with
 # the same 401 as "expired token" / "malformed token" / etc., rather than a
 # fourth, inconsistent status code.
-_bearer_scheme = HTTPBearer(auto_error=False)
+# Not module-private: auth/api_keys.py's get_current_caller() reuses this
+# exact instance so a request already screened there for an API key falls
+# through to the same bearer-parsing behaviour, rather than a second,
+# independently-configured HTTPBearer that could drift from this one.
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> User:
     """FastAPI dependency protecting every report route. Resolves the
     Authorization: Bearer <token> header into the User row it names, or

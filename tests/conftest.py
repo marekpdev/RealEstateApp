@@ -4,6 +4,18 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+# config.py (and, through it, server.py's CORSMiddleware construction and
+# auth/api_keys.py's SERVICE_API_KEYS) reads CORS_ALLOWED_ORIGINS and
+# SERVICE_API_KEYS once, at import time - whichever test module `import
+# server` first, anywhere in this session, freezes both for the rest of
+# the run. setdefault() so an explicit value in the real environment (CI,
+# a developer's own .env) still wins; this only supplies a deterministic
+# fallback so tests/test_cors.py and tests/test_api_keys.py don't depend
+# on whatever happens to be ambient. Must run before `config`/`server` are
+# imported anywhere below or in any test module.
+os.environ.setdefault("CORS_ALLOWED_ORIGINS", "https://allowed.example.com")
+os.environ.setdefault("SERVICE_API_KEYS", "test-service-key")
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
