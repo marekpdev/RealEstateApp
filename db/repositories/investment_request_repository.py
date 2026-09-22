@@ -1,7 +1,7 @@
 import uuid
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from db.enums import JobStatus
@@ -12,6 +12,48 @@ from db.repositories.base import BaseRepository
 class InvestmentRequestRepository(BaseRepository):
     async def get_by_id(self, request_id: uuid.UUID) -> Optional[InvestmentRequest]:
         return await self.session.get(InvestmentRequest, request_id)
+
+    async def get_by_id_for_user(
+        self, request_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Optional[InvestmentRequest]:
+        """Same lookup as get_by_id(), scoped to a specific owner. Used by
+        the read-only API endpoints (GET /api/v1/reports/{id}) so a request
+        id that belongs to a different user is indistinguishable from one
+        that doesn't exist at all (a plain get_by_id() would leak existence
+        via a 200-vs-404 response difference) - the same 404-not-403 choice
+        a future per-user authorization check would need to make explicit
+        once there's more than one real user to tell apart."""
+        return await self.session.scalar(
+            select(InvestmentRequest).where(
+                InvestmentRequest.id == request_id,
+                InvestmentRequest.user_id == user_id,
+            )
+        )
+
+    async def list_by_user(
+        self, user_id: uuid.UUID, *, limit: int, offset: int
+    ) -> List[InvestmentRequest]:
+        """Newest-first, matching ix_investment_requests_user_id_created_at
+        (db/models.py) - the composite index built for exactly this access
+        pattern ("this user's requests, paginated, newest first")."""
+        result = await self.session.execute(
+            select(InvestmentRequest)
+            .where(InvestmentRequest.user_id == user_id)
+            .order_by(InvestmentRequest.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
+    async def count_by_user(self, user_id: uuid.UUID) -> int:
+        """The full matching count regardless of limit/offset, so a client
+        paginating GET /api/v1/reports can compute how many pages remain
+        without walking every page first."""
+        return await self.session.scalar(
+            select(func.count()).select_from(InvestmentRequest).where(
+                InvestmentRequest.user_id == user_id
+            )
+        )
 
     async def create_idempotent(
         self,
