@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from chainlit.utils import mount_chainlit
 from sqlalchemy import text
 
+from api.v1 import api_router
 from config import config
 from db.session import dispose_engine, get_engine
 from services.market_data_gateway import RapidRealEstateMarketClient
@@ -70,6 +71,13 @@ async def readiness_check():
         raise HTTPException(status_code=503, detail=f"database unreachable: {e}")
 
     return {"status": "ready", "database": "reachable"}
+
+# Registered before mount_chainlit(): Starlette matches routes in
+# registration order, and mount_chainlit()'s Mount(path="") below matches
+# every path as a catch-all. Routes added to raw_app after that mount (the
+# health checks above are already safe, since they're defined first too)
+# would silently never be reached - the Mount would swallow them first.
+raw_app.include_router(api_router)
 
 try:
     mount_chainlit(app=raw_app, target="app.py", path="")
