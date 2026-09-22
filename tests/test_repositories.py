@@ -12,6 +12,7 @@ from db.repositories import (
     AgentRunRepository,
     InvestmentRequestRepository,
     ReportRepository,
+    hash_request_payload,
 )
 from db.session import session_scope
 
@@ -26,11 +27,13 @@ async def test_create_idempotent_inserts_new_row(db_session):
     key = _unique_key()
 
     row, created = await repo.create_idempotent(
-        user_id=DEMO_USER_ID, idempotency_key=key, city="Austin", budget="$500k"
+        user_id=DEMO_USER_ID, idempotency_key=key, raw_query="Invest in Austin, TX",
+        city="Austin", budget="$500k",
     )
 
     assert created is True
     assert row.city == "Austin"
+    assert row.request_payload_hash == hash_request_payload("Invest in Austin, TX")
     persisted = await db_session.get(InvestmentRequest, row.id)
     assert persisted is not None
 
@@ -55,12 +58,14 @@ async def test_create_idempotent_duplicate_key_rejected_and_replayed(db_session)
 
     async with session_scope() as session:
         first, first_created = await InvestmentRequestRepository(session).create_idempotent(
-            user_id=DEMO_USER_ID, idempotency_key=key, city="Austin", budget="$500k"
+            user_id=DEMO_USER_ID, idempotency_key=key, raw_query="Invest in Austin, TX",
+            city="Austin", budget="$500k",
         )
 
     async with session_scope() as session:
         second, second_created = await InvestmentRequestRepository(session).create_idempotent(
-            user_id=DEMO_USER_ID, idempotency_key=key, city="A different city", budget="$1M"
+            user_id=DEMO_USER_ID, idempotency_key=key, raw_query="Invest in Austin, TX",
+            city="A different city", budget="$1M",
         )
 
     assert first_created is True
@@ -89,10 +94,12 @@ async def test_create_idempotent_same_key_allowed_for_different_user(db_session)
     key = _unique_key()
 
     row_a, created_a = await repo.create_idempotent(
-        user_id=DEMO_USER_ID, idempotency_key=key, city="Austin", budget="$500k"
+        user_id=DEMO_USER_ID, idempotency_key=key, raw_query="Invest in Austin, TX",
+        city="Austin", budget="$500k",
     )
     row_b, created_b = await repo.create_idempotent(
-        user_id=other_user.id, idempotency_key=key, city="Denver", budget="$250k"
+        user_id=other_user.id, idempotency_key=key, raw_query="Invest in Denver, CO",
+        city="Denver", budget="$250k",
     )
 
     assert created_a is True
@@ -116,7 +123,8 @@ async def test_create_idempotent_concurrent_claims_yield_one_insert_one_replay(d
         async with sessionmaker() as session:
             repo = InvestmentRequestRepository(session)
             _, created = await repo.create_idempotent(
-                user_id=DEMO_USER_ID, idempotency_key=key, city="Austin", budget="$500k"
+                user_id=DEMO_USER_ID, idempotency_key=key, raw_query="Invest in Austin, TX",
+                city="Austin", budget="$500k",
             )
             await session.commit()
             return created

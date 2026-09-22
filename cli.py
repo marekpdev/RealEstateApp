@@ -65,12 +65,12 @@ async def _enqueue_and_await(raw_query: str, idempotency_key: str) -> RunOutcome
     select, see claim_request()'s docstring), then either replays an
     already-completed report or enqueues the slow work onto the Celery
     worker and polls the job row for a terminal status."""
-    request_id, should_run = await claim_request(DEMO_USER_ID, idempotency_key)
-    if not should_run:
-        return await get_replayed_outcome(request_id)
+    claim = await claim_request(DEMO_USER_ID, idempotency_key, raw_query)
+    if not claim.should_run:
+        return await get_replayed_outcome(claim.request_id)
 
-    generate_report.delay(raw_query, str(request_id), 20)
-    return await poll_until_terminal(request_id)
+    generate_report.delay(raw_query, str(claim.request_id), 20)
+    return await poll_until_terminal(claim.request_id)
 
 
 if __name__ == "__main__":

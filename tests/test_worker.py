@@ -46,6 +46,7 @@ async def _create_real_request_row() -> uuid.UUID:
         request, _ = await InvestmentRequestRepository(session).create_idempotent(
             user_id=DEMO_USER_ID,
             idempotency_key=f"worker-test-{uuid.uuid4()}",
+            raw_query="Invest in Austin, TX",
             city="",
             budget="",
         )

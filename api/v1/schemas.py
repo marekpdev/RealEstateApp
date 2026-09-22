@@ -32,9 +32,11 @@ class ReportCreateRequest(BaseModel):
 
 
 class ReportAccepted(BaseModel):
-    """202 response for POST /api/v1/reports. `status` is always PENDING at
-    this point - the job has been claimed and enqueued, not run - callers
-    poll `status_url` (GET .../{id}) for progress, exactly as
+    """Response for POST /api/v1/reports - `202` for a brand-new job
+    (`status` is PENDING, since it's just been claimed and enqueued, not
+    run) or `200` for a replay of an existing one (`status` reflects that
+    job's actual current state, whatever it is). Either way, callers poll
+    `status_url` (GET .../{id}) for progress, exactly as
     poll_until_terminal() already does internally for app.py/cli.py."""
 
     id: uuid.UUID
