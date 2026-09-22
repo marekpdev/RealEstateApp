@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from api.v1.auth import router as auth_router
 from api.v1.reports import router as reports_router
 
 # One aggregator per version: URL-path versioning (/api/v1/...), chosen
@@ -8,6 +9,7 @@ from api.v1.reports import router as reports_router
 # needed to pin a version. A hypothetical /api/v2 would get its own sibling
 # package and its own router here, without touching v1's.
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(auth_router)
 api_router.include_router(reports_router)
 
 __all__ = ["api_router"]

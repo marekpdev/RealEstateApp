@@ -106,3 +106,16 @@ spec:
             secretKeyRef:
               name: realestateapp-secrets
               key: POSTGRES_DSN
+        # Signs every access/refresh token (auth/tokens.py) - anyone who
+        # has this value can mint a token for any user id, so it belongs
+        # here, not in the plain-text config block above. Unlike the other
+        # keys here, config.config.JWT_SECRET_KEY has an in-code default,
+        # but this secretKeyRef is still unconditional: Kubernetes resolves
+        # it at container-creation time, before Python ever runs, so a
+        # missing key here still fails the pod fast (CreateContainerConfigError)
+        # rather than silently booting on the dev-only default in production.
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: realestateapp-secrets
+              key: JWT_SECRET_KEY

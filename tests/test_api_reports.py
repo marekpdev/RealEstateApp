@@ -6,8 +6,10 @@ import pytest
 import pytest_asyncio
 import respx
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 import server
+from auth.tokens import create_access_token
 from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from orchestration.run_recorder import run_claimed_request
@@ -74,8 +76,12 @@ async def client():
         yield ac
 
 
+def _auth_headers(user_id=DEMO_USER_ID) -> dict:
+    return {"Authorization": f"Bearer {create_access_token(user_id)}"}
+
+
 def _idempotency_headers(label: str = "idem") -> dict:
-    return {"Idempotency-Key": f"{label}-{uuid.uuid4()}"}
+    return {"Idempotency-Key": f"{label}-{uuid.uuid4()}", **_auth_headers()}
 
 
 @pytest.mark.asyncio
@@ -114,7 +120,9 @@ async def test_create_report_rejects_missing_query_with_422(db_session, client):
 @pytest.mark.asyncio
 async def test_create_report_rejects_missing_idempotency_key_with_422(db_session, client):
     response = await client.post(
-        "/api/v1/reports", json={"query": "Invest in Austin, TX up to $750,000"}
+        "/api/v1/reports",
+        json={"query": "Invest in Austin, TX up to $750,000"},
+        headers=_auth_headers(),  # authenticated, but no Idempotency-Key
     )
     assert response.status_code == 422
 
@@ -165,7 +173,9 @@ async def test_create_report_same_key_different_payload_returns_409(db_session, 
 
 @pytest.mark.asyncio
 async def test_get_report_returns_404_for_unknown_id(db_session, client):
-    response = await client.get(f"/api/v1/reports/{uuid.uuid4()}")
+    response = await client.get(
+        f"/api/v1/reports/{uuid.uuid4()}", headers=_auth_headers()
+    )
     assert response.status_code == 404
 
 
@@ -198,7 +208,9 @@ async def test_full_round_trip_create_then_fetch_completed_report(
             # this must be sequential, not concurrent.
             await pending_run["coro"]
 
-        get_response = await client.get(f"/api/v1/reports/{job_id}")
+        get_response = await client.get(
+            f"/api/v1/reports/{job_id}", headers=_auth_headers()
+        )
 
     assert get_response.status_code == 200
     body = get_response.json()
@@ -226,7 +238,9 @@ async def test_list_reports_is_paginated_and_newest_first(db_session, client):
         created_ids.append(request.id)
     await db_session.commit()
 
-    response = await client.get("/api/v1/reports?limit=2&offset=0")
+    response = await client.get(
+        "/api/v1/reports?limit=2&offset=0", headers=_auth_headers()
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["limit"] == 2
@@ -245,6 +259,70 @@ async def test_reports_endpoints_return_503_when_persistence_disabled(client):
             "/api/v1/reports", json={"query": "x"}, headers=_idempotency_headers()
         )
     assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_create_report_requires_authentication_with_401(db_session, client):
+    response = await client.post(
+        "/api/v1/reports",
+        json={"query": "Invest in Austin, TX up to $750,000"},
+        headers={"Idempotency-Key": f"idem-{uuid.uuid4()}"},  # no Authorization header
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_report_requires_authentication_with_401(db_session, client):
+    response = await client.get(f"/api/v1/reports/{uuid.uuid4()}")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_reports_requires_authentication_with_401(db_session, client):
+    response = await client.get("/api/v1/reports")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_report_rejects_garbage_token_with_401(db_session, client):
+    response = await client.get(
+        f"/api/v1/reports/{uuid.uuid4()}",
+        headers={"Authorization": "Bearer not-a-real-token"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_report_owned_by_a_different_user_returns_404(db_session, client):
+    """Anti-enumeration: user B asking for user A's report id gets the same
+    404 a genuinely unknown id would - never a 403, which would itself leak
+    that the id exists but belongs to someone else. This is the same
+    get_by_id_for_user() choice test_get_report_returns_404_for_unknown_id
+    already covers for an id that doesn't exist at all; this test covers the
+    other way a lookup can legitimately fail now that ownership is resolved
+    from a real caller identity (the JWT's `sub`) instead of a single
+    hardcoded DEMO_USER_ID."""
+    from db.repositories import InvestmentRequestRepository
+
+    other_user_id = uuid.uuid4()
+    await db_session.execute(
+        text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, :pw)"),
+        {"id": other_user_id, "email": f"{other_user_id}@example.com", "pw": "unusable"},
+    )
+    request, _ = await InvestmentRequestRepository(db_session).create_idempotent(
+        user_id=other_user_id,
+        idempotency_key=f"owner-test-{uuid.uuid4()}",
+        raw_query="Invest in Seattle, WA",
+        city="Seattle, WA",
+        budget="$1",
+        status=JobStatus.PENDING,
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        f"/api/v1/reports/{request.id}", headers=_auth_headers()  # DEMO_USER_ID's token
+    )
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

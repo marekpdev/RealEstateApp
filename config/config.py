@@ -82,6 +82,23 @@ KNOWLEDGE_BASE_SYNC_LOCK_TTL_SECONDS = int(
     os.getenv("KNOWLEDGE_BASE_SYNC_LOCK_TTL_SECONDS", "1800")
 )
 
+# JWT access/refresh tokens. HS256 (symmetric) rather than
+# RS256/asymmetric: one process both issues and verifies tokens here, so
+# there's no second service that needs to verify without holding the
+# signing secret - the scenario asymmetric signing actually buys you.
+# The default secret below is fine for the offline/dev/CI posture this repo
+# runs under (see OFFLINE_MODE); a real deployment must override it with a
+# long random value via the JWT_SECRET_KEY env var.
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-only-insecure-secret-change-before-any-real-deployment")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+# Short-lived on purpose: the blast radius of a leaked access token is
+# bounded by how soon it stops working on its own. The refresh token is
+# long-lived so a client doesn't have to re-prompt for a password every 15
+# minutes, and is only ever sent to POST /api/v1/auth/refresh, not on every
+# request.
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+JWT_REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_MINUTES", "10080"))  # 7 days
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

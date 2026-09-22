@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from api.v1.schemas import (
     ReportAccepted,
@@ -11,9 +11,10 @@ from api.v1.schemas import (
     ReportListResponse,
     ReportSummary,
 )
+from auth.dependencies import get_current_user
 from config import config
-from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
+from db.models import User
 from db.repositories import InvestmentRequestRepository, ReportRepository
 from db.session import session_scope
 from orchestration.run_recorder import claim_request
@@ -25,7 +26,17 @@ IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 
 def _require_persistence() -> None:
-    """Every route here deals in a request_id that has to mean the same
+    """A dependency, not a plain function call inside each route body, and
+    deliberately declared *before* get_current_user in every route's
+    signature below: FastAPI resolves a function's Depends() parameters
+    left-to-right, and an exception from an earlier one skips every later
+    one (including get_current_user's own database lookup). That matters
+    because this check must still work,
+    and still return 503 rather than something else, in an environment
+    with no database at all - the same environment get_current_user cannot
+    function in (it depends on session_scope() to resolve the caller).
+
+    Every route here deals in a request_id that has to mean the same
     thing across two separate processes (this one and the Celery worker
     that will eventually run the graph) - unlike app.py/cli.py,
     DB_PERSISTENCE_ENABLED=false has no equivalent synchronous fallback
@@ -84,9 +95,10 @@ async def create_report(
             "genuinely new request is the usual choice."
         ),
     ),
+    _persistence: None = Depends(_require_persistence),
+    current_user: User = Depends(get_current_user),
 ) -> ReportAccepted:
-    _require_persistence()
-    claim = await claim_request(DEMO_USER_ID, idempotency_key, payload.query)
+    claim = await claim_request(current_user.id, idempotency_key, payload.query)
     if claim.payload_conflict:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -116,11 +128,14 @@ async def create_report(
     summary="Fetch one report request's current status, and its content once complete",
     name="get_report",
 )
-async def get_report(request_id: uuid.UUID) -> ReportDetail:
-    _require_persistence()
+async def get_report(
+    request_id: uuid.UUID,
+    _persistence: None = Depends(_require_persistence),
+    current_user: User = Depends(get_current_user),
+) -> ReportDetail:
     async with session_scope() as session:
         investment_request = await InvestmentRequestRepository(session).get_by_id_for_user(
-            request_id, DEMO_USER_ID
+            request_id, current_user.id
         )
         if investment_request is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Report request not found.")
@@ -150,12 +165,13 @@ async def get_report(request_id: uuid.UUID) -> ReportDetail:
 async def list_reports(
     limit: int = Query(20, ge=1, le=100, description="Max rows to return."),
     offset: int = Query(0, ge=0, description="Rows to skip, for paging."),
+    _persistence: None = Depends(_require_persistence),
+    current_user: User = Depends(get_current_user),
 ) -> ReportListResponse:
-    _require_persistence()
     async with session_scope() as session:
         repo = InvestmentRequestRepository(session)
-        rows = await repo.list_by_user(DEMO_USER_ID, limit=limit, offset=offset)
-        total = await repo.count_by_user(DEMO_USER_ID)
+        rows = await repo.list_by_user(current_user.id, limit=limit, offset=offset)
+        total = await repo.count_by_user(current_user.id)
 
     return ReportListResponse(
         items=[ReportSummary.model_validate(row) for row in rows],

@@ -28,6 +28,8 @@ dependencies = [
     "pytest-asyncio>=0.23.0",
     "respx>=0.20.0",
     "celery[redis]>=5.5.0",
+    "pyjwt>=2.9.0",
+    "bcrypt>=4.1.0",
 ]
 
 [tool.pytest.ini_options]

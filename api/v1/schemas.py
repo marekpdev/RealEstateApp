@@ -89,6 +89,44 @@ class ReportSummary(BaseModel):
     created_at: datetime
 
 
+class LoginRequest(BaseModel):
+    """Body for POST /api/v1/auth/login. There is no self-registration
+    endpoint (see db/models.py's User docstring), so `email` must already
+    belong to a migration-seeded row."""
+
+    email: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1, max_length=255)
+
+
+class RefreshRequest(BaseModel):
+    """Body for POST /api/v1/auth/refresh."""
+
+    refresh_token: str = Field(..., min_length=1)
+
+
+class TokenPair(BaseModel):
+    """Response for POST /api/v1/auth/login. `token_type` is always
+    "bearer" - what a client puts in the Authorization header
+    (`Authorization: Bearer <access_token>`) on every subsequent call to a
+    protected route. `refresh_token` is only ever sent back here and to
+    /auth/refresh, never required on a report route."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class AccessTokenResponse(BaseModel):
+    """Response for POST /api/v1/auth/refresh - deliberately narrower than
+    TokenPair: this endpoint mints a new access token from a still-valid
+    refresh token but does not rotate the refresh token itself (see
+    api/v1/auth.py's refresh() docstring for why), so there is nothing new
+    to hand back on that front."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
 class ReportListResponse(BaseModel):
     """`total` is the full matching count regardless of `limit`/`offset`, so
     a client can compute how many pages remain without a second request."""
