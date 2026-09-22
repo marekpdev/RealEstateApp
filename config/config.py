@@ -99,6 +99,41 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 JWT_REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_MINUTES", "10080"))  # 7 days
 
+# --- CORS ----------------------------------------------------------------
+# Comma-separated exact origins (scheme + host + port) allowed to make
+# cross-origin browser requests against this API, e.g.
+# "https://app.example.com,http://localhost:3000". Empty by default: unlike
+# JWT_SECRET_KEY, there's no safe default value here, so with nothing
+# configured every cross-origin browser request is rejected until a
+# deployment explicitly opts specific origins in. Never "*": this API's
+# clients send credentials (a JWT or an API key, both carried in a header),
+# and a wildcard origin cannot be combined with credentialed
+# requests - the browser-enforced rule CORS relies on to stop a malicious
+# page from reading another site's authenticated response breaks the
+# instant "any origin" also means "and send its cookies/headers along".
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()
+]
+if "*" in CORS_ALLOWED_ORIGINS:
+    raise ValueError(
+        "CORS_ALLOWED_ORIGINS must not include '*' - name exact allowed origins "
+        "instead. A wildcard origin cannot be combined with credentialed requests, "
+        "which this API's clients send (see this constant's own comment)."
+    )
+
+# --- Service-to-service API keys ------------------------------------------
+# Comma-separated static keys authenticating a machine caller (a script, a
+# cron job, a partner integration) as the seeded demo user, as an
+# alternative to logging in for a JWT - see auth/api_keys.py. An API key has
+# no expiry and needs no login step, unlike an access token; that's the
+# entire point (nothing here signs in on a schedule), and exactly why it
+# must be a long, random, secret string rather than something a human
+# memorizes. Empty by default: no key authenticates anything until one is
+# explicitly configured.
+SERVICE_API_KEYS = frozenset(
+    key.strip() for key in os.getenv("SERVICE_API_KEYS", "").split(",") if key.strip()
+)
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

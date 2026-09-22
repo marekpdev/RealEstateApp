@@ -1,10 +1,13 @@
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from chainlit.utils import mount_chainlit
 from sqlalchemy import text
 
 from api.v1 import api_router
+from api.v1.reports import IDEMPOTENCY_KEY_HEADER
+from auth.api_keys import API_KEY_HEADER_NAME
 from config import config
 from db.session import dispose_engine, get_engine
 from services.market_data_gateway import RapidRealEstateMarketClient
@@ -47,6 +50,25 @@ async def lifespan(app: FastAPI):
 
 
 raw_app = FastAPI(title="Real Estate Agentic System API", lifespan=lifespan)
+
+# CORS is a browser-enforced rule, not a server-side access control: curl,
+# httpx, and Postman ignore it entirely, and a stolen token is exactly as
+# usable through them with or without this middleware. What it actually
+# protects against is a *different* site's JavaScript, running in a
+# logged-in user's own browser, silently reading this API's responses on
+# their behalf. Only origins named in config.CORS_ALLOWED_ORIGINS get a
+# response that lets a browser's fetch()/XHR see the result at all;
+# allow_credentials=True (this API's tokens travel in an Authorization
+# header, which counts) is exactly why that list can never contain "*" -
+# config.py enforces that at import time, not here, so a misconfiguration
+# fails at boot, loudly, rather than on the first cross-origin request.
+raw_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_KEY_HEADER, API_KEY_HEADER_NAME],
+)
 
 @raw_app.get("/health", tags=["Infrastructure Monitoring"])
 async def health_check():

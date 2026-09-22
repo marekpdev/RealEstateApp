@@ -11,7 +11,7 @@ from api.v1.schemas import (
     ReportListResponse,
     ReportSummary,
 )
-from auth.dependencies import get_current_user
+from auth.api_keys import get_current_caller
 from config import config
 from db.enums import JobStatus
 from db.models import User
@@ -27,14 +27,16 @@ IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 def _require_persistence() -> None:
     """A dependency, not a plain function call inside each route body, and
-    deliberately declared *before* get_current_user in every route's
+    deliberately declared *before* get_current_caller in every route's
     signature below: FastAPI resolves a function's Depends() parameters
     left-to-right, and an exception from an earlier one skips every later
-    one (including get_current_user's own database lookup). That matters
-    because this check must still work,
+    one (including get_current_caller's own database lookup, on either the
+    API-key or the JWT path - see auth/api_keys.py). That matters because
+    this check must still work,
     and still return 503 rather than something else, in an environment
-    with no database at all - the same environment get_current_user cannot
-    function in (it depends on session_scope() to resolve the caller).
+    with no database at all - the same environment get_current_caller
+    cannot function in (both of its paths depend on session_scope() to
+    resolve the caller).
 
     Every route here deals in a request_id that has to mean the same
     thing across two separate processes (this one and the Celery worker
@@ -96,7 +98,7 @@ async def create_report(
         ),
     ),
     _persistence: None = Depends(_require_persistence),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_caller),
 ) -> ReportAccepted:
     claim = await claim_request(current_user.id, idempotency_key, payload.query)
     if claim.payload_conflict:
@@ -131,7 +133,7 @@ async def create_report(
 async def get_report(
     request_id: uuid.UUID,
     _persistence: None = Depends(_require_persistence),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_caller),
 ) -> ReportDetail:
     async with session_scope() as session:
         investment_request = await InvestmentRequestRepository(session).get_by_id_for_user(
@@ -166,7 +168,7 @@ async def list_reports(
     limit: int = Query(20, ge=1, le=100, description="Max rows to return."),
     offset: int = Query(0, ge=0, description="Rows to skip, for paging."),
     _persistence: None = Depends(_require_persistence),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_caller),
 ) -> ReportListResponse:
     async with session_scope() as session:
         repo = InvestmentRequestRepository(session)
