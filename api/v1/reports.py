@@ -41,11 +41,15 @@ def _require_persistence() -> None:
 
     Every route here deals in a request_id that has to mean the same
     thing across two separate processes (this one and the Celery worker
-    that will eventually run the graph) - unlike app.py/cli.py,
+    that will eventually run the graph) - unlike cli.py,
     DB_PERSISTENCE_ENABLED=false has no equivalent synchronous fallback
     here, since there is no HTTP response that could hand back a finished
-    report on the spot. 503, not 500: the server itself is healthy, this
-    one capability is deliberately turned off."""
+    report on the spot. app.py has no fallback of its own for this either
+    any more - it always reaches this exact route over HTTP (see
+    services/report_api_client.py), so a caller of app.py's own handle_query()
+    just sees this 503 surface as a plain API error. 503, not 500: the
+    server itself is healthy, this one capability is deliberately turned
+    off."""
     if not config.DB_PERSISTENCE_ENABLED:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

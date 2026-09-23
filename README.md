@@ -111,8 +111,11 @@ uv run python scripts/sync_knowledge_base.py
 
 #### Run Application
 ```bash
-# Run Web Interface
-uv run chainlit run app.py -w
+# Run Web Interface (serves both the Chainlit UI and the /api/v1 HTTP API
+# it now talks to as a client - `chainlit run app.py` alone is no longer
+# enough, since it would start Chainlit's own dev server with no API
+# mounted alongside it for app.py to actually call)
+uv run uvicorn server:app --reload --port 8080
 
 # Run CLI Mode
 uv run python cli.py

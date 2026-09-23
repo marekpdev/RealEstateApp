@@ -15,9 +15,12 @@ from config import config
 # asyncio.run() once per task (a brand-new event loop every time - see
 # worker/tasks.py's generate_report docstring), while this client is only
 # ever used from the API process, which owns one long-lived event loop for
-# its entire lifetime, exactly like db/session.py's engine from app.py/
-# cli.py's point of view. A lazy singleton built once and reused for every
-# request is correct here for the same reason it's correct there.
+# its entire lifetime, exactly like db/session.py's engine from cli.py's
+# point of view (app.py no longer touches db/session.py at all - it talks
+# to this same API process over HTTP instead, see
+# services/report_api_client.py, which is itself a lazy singleton for
+# exactly this same reason). A lazy singleton built once and reused for
+# every request is correct here for the same reason it's correct there.
 _redis_client: Optional[Redis] = None
 
 

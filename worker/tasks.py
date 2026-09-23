@@ -122,7 +122,8 @@ def ping() -> str:
 )
 def generate_report(self, raw_query: str, request_id: str, recursion_limit: int = 20) -> str:
     """Runs the multi-agent graph for an already-claimed request and records
-    its outcome - the task app.py/cli.py enqueue instead of calling
+    its outcome - the task cli.py and api/v1/reports.py's create_report()
+    route (app.py's own path to this, over HTTP) enqueue instead of calling
     orchestration.run_recorder.execute_and_record() inline.
 
     Deliberately thin: it does no claiming of its own. The caller (see
@@ -142,12 +143,15 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
 
     asyncio.run() is correct here specifically because a Celery worker
     process has no event loop already running when a task body executes -
-    unlike app.py/cli.py, which call into this module from inside their own
-    already-running event loop and must never call asyncio.run() themselves.
-    But asyncio.run() opens a *new* event loop every call and tears it down
-    when it returns - while db/session.py's engine is a process-wide lazy
-    singleton (deliberately, so app.py/cli.py's single long-lived event
-    loop only ever creates it once - see db/session.py's module docstring).
+    unlike cli.py and api/v1/reports.py's create_report() route (app.py's
+    own path to enqueuing this task now, over HTTP - see
+    services/report_api_client.py), which call into this module from
+    inside their own already-running event loop and must never call
+    asyncio.run() themselves. But asyncio.run() opens a *new* event loop
+    every call and tears it down when it returns - while db/session.py's
+    engine is a process-wide lazy singleton (deliberately, so each of
+    those callers' own single long-lived event loop only ever creates it
+    once - see db/session.py's module docstring).
     A worker process handles many tasks over its lifetime, each getting its
     own fresh loop from its own asyncio.run() call, but get_engine() would
     keep handing back the *first* task's engine - whose pooled asyncpg
