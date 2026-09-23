@@ -134,6 +134,29 @@ SERVICE_API_KEYS = frozenset(
     key.strip() for key in os.getenv("SERVICE_API_KEYS", "").split(",") if key.strip()
 )
 
+# --- Rate limiting (token bucket) ------------------------------------------
+# One bucket per authenticated identity (the User.id auth/api_keys.py's
+# get_current_caller() resolves for either a JWT or an API key), guarding
+# every /api/v1/reports route - see rate_limit/. A separate logical Redis DB
+# from the Celery broker (0) and result backend (1), for the same reason
+# those two are already split from each other above: a queue-inspection or
+# FLUSHDB-style command scoped to one concern should never see, or wipe,
+# another concern's keys, even though all three point at the same physical
+# Redis server by default.
+RATE_LIMIT_REDIS_URL = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/2")
+# The bucket's total capacity: the maximum burst one identity can spend all
+# at once before being throttled. Refills continuously (not in discrete
+# steps) at RATE_LIMIT_REFILL_PER_SECOND tokens/second, capped at this value
+# - never handed back in one lump per window, unlike a fixed-window counter.
+RATE_LIMIT_BUCKET_CAPACITY = int(os.getenv("RATE_LIMIT_BUCKET_CAPACITY", "20"))
+RATE_LIMIT_REFILL_PER_SECOND = float(os.getenv("RATE_LIMIT_REFILL_PER_SECOND", "2.0"))
+# TTL on the Redis key backing one identity's bucket. A full refill
+# (capacity / refill_per_second) is already enough idle time for the bucket
+# to be back at capacity anyway, so letting the key itself expire well after
+# that is indistinguishable from keeping it forever - except it doesn't
+# leave one key per caller sitting in Redis forever once they stop calling.
+RATE_LIMIT_KEY_TTL_SECONDS = int(os.getenv("RATE_LIMIT_KEY_TTL_SECONDS", "600"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:

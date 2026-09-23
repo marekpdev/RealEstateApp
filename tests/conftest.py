@@ -18,6 +18,7 @@ os.environ.setdefault("SERVICE_API_KEYS", "test-service-key")
 
 import pytest
 import pytest_asyncio
+import redis
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -31,6 +32,32 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 @pytest.fixture
 def mock_state():
     return OverallGraphState()
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_buckets():
+    """Every test in this suite shares one real Redis instance (this
+    project always tests against real Postgres and real Redis, never mocks
+    - tests/test_worker.py already connects to it directly for exactly this
+    reason). Without this, report-endpoint calls made by other test files
+    (test_api_reports.py, test_api_auth.py, test_cors.py, test_api_keys.py)
+    would slowly draw down the same DEMO_USER_ID bucket the rate limiter
+    enforces, eventually tripping a 429 in some unrelated, later test
+    purely because of test order and cumulative request count across files
+    - not anything that test itself did wrong. Flushing before every test
+    (not just tests/test_rate_limiting.py) keeps every other file's
+    existing tests exactly as request-count-agnostic as they were before
+    the rate limiter existed - the same isolation goal db_session's
+    per-test rollback already serves for Postgres, applied here to Redis
+    instead.
+    """
+    client = redis.Redis.from_url(config.RATE_LIMIT_REDIS_URL)
+    try:
+        for key in client.scan_iter(match="ratelimit:*"):
+            client.delete(key)
+        yield
+    finally:
+        client.close()
 
 @pytest.fixture
 def mock_llm():
