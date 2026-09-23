@@ -34,13 +34,41 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
 # The graph now runs inside a Celery worker process, not inline in the
-# request handler - app.py/cli.py enqueue the work, then poll the
-# investment_requests row (the only channel both processes share right now)
-# until it reaches a terminal status. poll_interval trades responsiveness
-# for database load; timeout is a safety net so a caller never waits
-# forever on a job whose worker died without updating the row.
+# request handler - cli.py enqueues the work directly and polls the
+# investment_requests row itself; app.py enqueues and polls too, but only
+# ever through its own HTTP calls to GET /api/v1/reports/{id} (see
+# services/report_api_client.py), never by touching the row directly. Both
+# still share the same poll_interval/timeout values so their behavior is
+# observably identical from a user's point of view. poll_interval trades
+# responsiveness for load (a database read for cli.py, an HTTP request for
+# app.py); timeout is a safety net so a caller never waits forever on a job
+# whose worker died without reaching a terminal status.
 REPORT_POLL_INTERVAL_SECONDS = float(os.getenv("REPORT_POLL_INTERVAL_SECONDS", "1.0"))
 REPORT_POLL_TIMEOUT_SECONDS = float(os.getenv("REPORT_POLL_TIMEOUT_SECONDS", "300"))
+
+# --- Chainlit as an API client ---------------------------------------------
+# app.py no longer imports the LangGraph graph or the orchestration/
+# persistence layer directly - its Chainlit handlers talk to this same
+# process's own /api/v1 HTTP surface over a real loopback connection,
+# exactly like any other API client would (see services/report_api_client.py).
+# API_BASE_URL is where that surface is actually listening; the default
+# matches the port this repo's own Dockerfile/uvicorn command binds (see
+# docker-compose.yml's web_app service), which is also where Chainlit itself
+# ends up mounted (server.py's mount_chainlit() call) - so the default is
+# correct unmodified in both Docker and a local `uvicorn server:app --port
+# 8080` run.
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080")
+
+# Credentials app.py logs in with (POST /api/v1/auth/login) to authenticate
+# its own report requests as the seeded demo user, instead of reading
+# Postgres directly. Must match the row alembic/versions/
+# 45ed0d458cdf_seed_demo_user_login_password.py seeds - that migration
+# duplicates this same literal password rather than importing it from here,
+# since a migration must stay a frozen historical artifact (see its own
+# comment) and predates this constant existing at all. Override both
+# together if a real deployment reseeds that row with different credentials.
+DEMO_USER_EMAIL = os.getenv("DEMO_USER_EMAIL", "demo@realestateapp.local")
+DEMO_USER_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "demo-password-123")
 
 # generate_report's retry policy. TASK_MAX_RETRIES bounds how many times a
 # task that raises can be redelivered before it's treated as poison and

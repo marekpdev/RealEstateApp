@@ -90,9 +90,13 @@ class InvestmentRequestRepository(BaseRepository):
         conflict here. Whether a replay's raw_query actually matches what
         the key was first used for is the caller's decision (see
         orchestration.run_recorder.claim_request()'s payload_conflict),
-        not this method's: app.py/cli.py's own idempotency keys (a Chainlit
-        message id, a fresh uuid4 per CLI invocation) replay regardless of
-        payload by design, and only the HTTP API acts on a mismatch.
+        not this method's: cli.py's own idempotency key (a fresh uuid4 per
+        CLI invocation) calls claim_request() directly and ignores a
+        mismatch, replaying regardless of payload by design. app.py's
+        idempotency key (a Chainlit message id) and every other caller go
+        through the HTTP API, which does act on a mismatch - though neither
+        entrypoint ever deliberately reuses a key with a different payload,
+        so this should never actually trigger for either.
 
         Returns (row, created) - created=False means a row for this
         (user_id, idempotency_key) already existed and this call is a

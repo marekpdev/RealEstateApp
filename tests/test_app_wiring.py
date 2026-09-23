@@ -6,12 +6,17 @@ import pytest
 import respx
 from sqlalchemy import select
 
-import app
 import cli
 from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from db.models import AgentRun, InvestmentRequest, Report
-from orchestration.run_recorder import RunOutcome, run_claimed_request
+from orchestration.run_recorder import run_claimed_request
+
+# app.py no longer calls any of orchestration/run_recorder.py directly - it
+# talks to this same process's own /api/v1 HTTP surface instead (see
+# services/report_api_client.py). Its own wiring tests live in
+# tests/test_app_api_client.py now; this file covers cli.py, which is
+# unaffected and still wired exactly as before.
 
 
 def _unique_key(label: str) -> str:
@@ -74,9 +79,10 @@ def _inline_worker(module):
     one that opened them.)
 
     Patches generate_report.delay and poll_until_terminal on the given
-    module (app or cli) so handle_query()'s real enqueue-then-poll call
-    sites are what trigger this, exactly as production would - just
-    without a real broker/worker in between."""
+    module (cli, the only caller left that still imports either directly)
+    so handle_query()'s real enqueue-then-poll call sites are what trigger
+    this, exactly as production would - just without a real broker/worker
+    in between."""
     pending_run: dict = {}
 
     def _fake_delay(raw_query: str, request_id: str, recursion_limit: int):
@@ -99,17 +105,15 @@ def _inline_worker(module):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("module", [app, cli])
-async def test_handle_query_persists_full_run(db_session, offline_graph, module):
-    """app.handle_query() and cli.handle_query() both claim the request,
-    enqueue it onto the Celery worker, and poll until it lands the same
-    rows in the database: one completed request, six completed agent_runs,
-    one report."""
+async def test_handle_query_persists_full_run(db_session, offline_graph):
+    """cli.handle_query() claims the request, enqueues it onto the Celery
+    worker, and polls until it lands the same rows in the database: one
+    completed request, six completed agent_runs, one report."""
     key = _unique_key("wiring-full-run")
 
-    with _inline_worker(module):
+    with _inline_worker(cli):
         async with respx.mock:
-            await module.handle_query(
+            await cli.handle_query(
                 "Invest in Austin, TX up to $900,000", idempotency_key=key
             )
 
@@ -134,17 +138,16 @@ async def test_handle_query_persists_full_run(db_session, offline_graph, module)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("module", [app, cli])
-async def test_handle_query_enqueues_with_the_claimed_request_id(db_session, offline_graph, module):
+async def test_handle_query_enqueues_with_the_claimed_request_id(db_session, offline_graph):
     """generate_report.delay() must be called with the exact same
     request_id claim_request() already wrote to the row - client-generated
     UUID primary keys are what make handing that id to Celery before the
     run even starts possible at all (see db/models.py, claim_request())."""
     key = _unique_key("wiring-enqueue-args")
 
-    with _inline_worker(module) as mock_task:
+    with _inline_worker(cli) as mock_task:
         async with respx.mock:
-            await module.handle_query("Invest in Austin, TX", idempotency_key=key)
+            await cli.handle_query("Invest in Austin, TX", idempotency_key=key)
 
     request = await db_session.scalar(
         select(InvestmentRequest).where(InvestmentRequest.idempotency_key == key)
@@ -153,44 +156,13 @@ async def test_handle_query_enqueues_with_the_claimed_request_id(db_session, off
 
 
 @pytest.mark.asyncio
-async def test_app_handle_query_replay_renders_report_explicitly(db_session, offline_graph):
-    """A replayed outcome (claim_request() finds an already-COMPLETED row,
-    so nothing is enqueued and the graph never runs a second time) must
-    still show the user the report - app.py renders it itself, exactly
-    once, since there is no worker run whose side effect could show it."""
-    key = _unique_key("wiring-app-replay")
-
-    with _inline_worker(app):
-        async with respx.mock:
-            await app.handle_query("Invest in Austin, TX up to $900,000", idempotency_key=key)
-
-    with patch("app.render_financial_report", new_callable=AsyncMock) as mock_render, \
-         patch("app.generate_report") as mock_task, \
-         patch("graph.compiledStateGraph.astream") as mock_astream:
-        await app.handle_query("A completely different query", idempotency_key=key)
-
-    mock_task.delay.assert_not_called()
-    mock_astream.assert_not_called()
-    mock_render.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_app_handle_query_respects_db_persistence_disabled():
-    """DB_PERSISTENCE_ENABLED=false is the documented escape hatch: the graph
-    still runs via the old plain ainvoke() path, and _enqueue_and_await() -
-    the database-aware, worker-dispatching path - must never be called at
-    all."""
-    with patch("app.config.DB_PERSISTENCE_ENABLED", False), \
-         patch("app.compiledStateGraph.ainvoke", new_callable=AsyncMock) as mock_ainvoke, \
-         patch("app._enqueue_and_await", new_callable=AsyncMock) as mock_enqueue:
-        await app.handle_query("Invest in Austin, TX", idempotency_key="irrelevant")
-
-    mock_ainvoke.assert_awaited_once()
-    mock_enqueue.assert_not_called()
-
-
-@pytest.mark.asyncio
 async def test_cli_handle_query_respects_db_persistence_disabled():
+    """DB_PERSISTENCE_ENABLED=false is cli.py's documented escape hatch: the
+    graph still runs via the old plain ainvoke() path, and
+    _enqueue_and_await() - the database-aware, worker-dispatching path -
+    must never be called at all. app.py no longer has an equivalent of its
+    own (see tests/test_app_api_client.py's own persistence-disabled test,
+    which now exercises the API's 503 instead)."""
     with patch("cli.config.DB_PERSISTENCE_ENABLED", False), \
          patch("cli.compiledStateGraph.ainvoke", new_callable=AsyncMock) as mock_ainvoke, \
          patch("cli._enqueue_and_await", new_callable=AsyncMock) as mock_enqueue:
@@ -198,53 +170,3 @@ async def test_cli_handle_query_respects_db_persistence_disabled():
 
     mock_ainvoke.assert_awaited_once()
     mock_enqueue.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_app_handle_query_surfaces_database_failure_instead_of_swallowing_it():
-    """A database error (e.g. the connection itself failing, not an
-    IntegrityError create_idempotent() already handles) must be surfaced to
-    the user rather than silently doing nothing - and must not crash the
-    Chainlit process either."""
-    with patch("app._enqueue_and_await", new_callable=AsyncMock) as mock_enqueue, \
-         patch("app.log_message", new_callable=AsyncMock) as mock_log:
-        mock_enqueue.side_effect = RuntimeError("connection refused")
-        await app.handle_query("Invest in Austin, TX", idempotency_key="irrelevant")
-
-    mock_log.assert_awaited_once()
-    assert "connection refused" in mock_log.await_args.args[0]
-
-
-@pytest.mark.asyncio
-async def test_app_handle_query_surfaces_a_failed_run_without_rendering_a_report():
-    """A structurally FAILED RunOutcome (the graph raised partway through)
-    must tell the user something went wrong, and must never call
-    render_financial_report - there is no report to show."""
-    failed_outcome = RunOutcome(
-        request_id=uuid.uuid4(), status=JobStatus.FAILED, report=None, replayed=False
-    )
-    with patch("app._enqueue_and_await", new_callable=AsyncMock, return_value=failed_outcome), \
-         patch("app.log_message", new_callable=AsyncMock) as mock_log, \
-         patch("app.render_financial_report", new_callable=AsyncMock) as mock_render:
-        await app.handle_query("Invest in Austin, TX", idempotency_key="irrelevant")
-
-    mock_log.assert_awaited_once()
-    mock_render.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_app_handle_query_tells_user_when_polling_times_out():
-    """A non-terminal RunOutcome (poll_until_terminal() gave up watching,
-    not the job failing) must tell the user it's still working rather than
-    claiming failure or silently rendering nothing."""
-    still_running_outcome = RunOutcome(
-        request_id=uuid.uuid4(), status=JobStatus.RUNNING, report=None, replayed=False
-    )
-    with patch(
-        "app._enqueue_and_await", new_callable=AsyncMock, return_value=still_running_outcome
-    ), patch("app.log_message", new_callable=AsyncMock) as mock_log, \
-         patch("app.render_financial_report", new_callable=AsyncMock) as mock_render:
-        await app.handle_query("Invest in Austin, TX", idempotency_key="irrelevant")
-
-    mock_log.assert_awaited_once()
-    mock_render.assert_not_called()

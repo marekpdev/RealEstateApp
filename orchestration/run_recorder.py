@@ -44,10 +44,12 @@ class ClaimResult(NamedTuple):
     when a pre-existing row's stored request_payload_hash doesn't match
     this call's own raw_query - the same idempotency key reused for a
     genuinely different request, which the HTTP API turns into a 409.
-    app.py/cli.py's own idempotency keys (a Chainlit message id, a fresh
-    uuid4 per CLI invocation) are never deliberately reused with a
-    different payload, so they ignore this field entirely and always
-    replay regardless of it."""
+    cli.py calls claim_request() directly and ignores this field entirely,
+    always replaying regardless of it; app.py's own idempotency key (a
+    Chainlit message id) goes through that same HTTP API now, so a mismatch
+    would surface there as a 409 too - it never deliberately reuses a key
+    with a different payload, so in practice this should never actually
+    fire for either entrypoint."""
 
     request_id: uuid.UUID
     status: JobStatus
@@ -72,10 +74,12 @@ async def execute_and_record(
     A plain composition of claim_request() + run_claimed_request()/
     get_replayed_outcome() - kept as one call for callers that run the
     graph inline and don't need the id before the run finishes (tests,
-    and the DB_PERSISTENCE_ENABLED escape hatch's synchronous sibling
-    path). app.py/cli.py call the two halves separately instead (see
-    claim_request()'s docstring) so they can hand the id to a Celery task
-    before the run even starts.
+    and cli.py's own DB_PERSISTENCE_ENABLED escape hatch's synchronous
+    sibling path). cli.py and api/v1/reports.py's create_report() route
+    call the two halves separately instead (see claim_request()'s
+    docstring) so they can hand the id to a Celery task before the run even
+    starts - app.py no longer calls either half itself; it reaches that
+    same route over HTTP instead (see services/report_api_client.py).
 
     LangGraph orchestrates *within* a run; this module orchestrates the
     run's lifecycle in Postgres around it. Nothing here reaches into
@@ -107,8 +111,10 @@ async def claim_request(
     key is a future task queue's concern, not this module's.
 
     Public (not execute_and_record()'s private implementation detail)
-    because app.py/cli.py call it directly: InvestmentRequest.id is a
-    client-generated UUID (see db/models.py), assigned in Python and known
+    because cli.py and api/v1/reports.py's create_report() route (which
+    app.py now reaches over HTTP instead of calling any of this directly)
+    call it directly: InvestmentRequest.id is a client-generated UUID (see
+    db/models.py), assigned in Python and known
     the moment this claim's INSERT flushes - well before the graph itself
     has run a single node. That's what lets a caller learn the request_id
     immediately, hand it to a Celery task as that task's argument (see
@@ -158,8 +164,9 @@ async def run_claimed_request(
     """Runs the graph for a request_id that claim_request() has already
     claimed (should_run=True) - the continuation execute_and_record() calls
     right after its own claim, and the same continuation worker/tasks.py's
-    generate_report task calls after app.py/cli.py have claimed on its
-    behalf.
+    generate_report task calls after cli.py or api/v1/reports.py's
+    create_report() route (app.py's own path to this now, over HTTP) have
+    claimed on its behalf.
 
     claim_request() only guards against a *second request* for the same
     idempotency key - it says nothing about this exact call happening more
