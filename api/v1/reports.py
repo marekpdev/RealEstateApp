@@ -18,6 +18,7 @@ from db.models import User
 from db.repositories import InvestmentRequestRepository, ReportRepository
 from db.session import session_scope
 from orchestration.run_recorder import claim_request
+from rate_limit import enforce_rate_limit
 from worker.tasks import generate_report
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -99,6 +100,7 @@ async def create_report(
     ),
     _persistence: None = Depends(_require_persistence),
     current_user: User = Depends(get_current_caller),
+    _rate_limit: None = Depends(enforce_rate_limit),
 ) -> ReportAccepted:
     claim = await claim_request(current_user.id, idempotency_key, payload.query)
     if claim.payload_conflict:
@@ -134,6 +136,7 @@ async def get_report(
     request_id: uuid.UUID,
     _persistence: None = Depends(_require_persistence),
     current_user: User = Depends(get_current_caller),
+    _rate_limit: None = Depends(enforce_rate_limit),
 ) -> ReportDetail:
     async with session_scope() as session:
         investment_request = await InvestmentRequestRepository(session).get_by_id_for_user(
@@ -169,6 +172,7 @@ async def list_reports(
     offset: int = Query(0, ge=0, description="Rows to skip, for paging."),
     _persistence: None = Depends(_require_persistence),
     current_user: User = Depends(get_current_caller),
+    _rate_limit: None = Depends(enforce_rate_limit),
 ) -> ReportListResponse:
     async with session_scope() as session:
         repo = InvestmentRequestRepository(session)

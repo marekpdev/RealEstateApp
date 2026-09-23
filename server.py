@@ -10,6 +10,12 @@ from api.v1.reports import IDEMPOTENCY_KEY_HEADER
 from auth.api_keys import API_KEY_HEADER_NAME
 from config import config
 from db.session import dispose_engine, get_engine
+from rate_limit import (
+    RATE_LIMIT_LIMIT_HEADER,
+    RATE_LIMIT_REMAINING_HEADER,
+    RATE_LIMIT_RESET_HEADER,
+)
+from rate_limit.redis_client import dispose_redis_client, get_redis_client
 from services.market_data_gateway import RapidRealEstateMarketClient
 
 @asynccontextmanager
@@ -32,6 +38,13 @@ async def lifespan(app: FastAPI):
         async with get_engine().connect() as conn:
             await conn.execute(text("SELECT 1"))
 
+    # Same fail-fast posture, extended to the rate limiter's own backing
+    # store: every /api/v1/reports route depends on it now, so a process
+    # that boots healthy while Redis is unreachable would only discover
+    # that on the first real request, exactly the failure mode the
+    # database check above already exists to avoid.
+    await get_redis_client().ping()
+
     yield
     # Server Tear Down Sequence. Reached on SIGTERM/SIGINT, not just a
     # normal exit: uvicorn's own signal handlers stop it accepting new
@@ -47,6 +60,7 @@ async def lifespan(app: FastAPI):
     await async_client_pool.aclose()
     if config.DB_PERSISTENCE_ENABLED:
         await dispose_engine()
+    await dispose_redis_client()
 
 
 raw_app = FastAPI(title="Real Estate Agentic System API", lifespan=lifespan)
@@ -62,12 +76,25 @@ raw_app = FastAPI(title="Real Estate Agentic System API", lifespan=lifespan)
 # header, which counts) is exactly why that list can never contain "*" -
 # config.py enforces that at import time, not here, so a misconfiguration
 # fails at boot, loudly, rather than on the first cross-origin request.
+# expose_headers: without it, CORSMiddleware only lets cross-origin
+# JavaScript read the handful of headers the Fetch spec calls "simple"
+# (Content-Type, Content-Length, etc) - curl/Postman can see every header
+# regardless (CORS is enforced by the browser, not the server), but a real
+# browser-based client trying to implement backoff against the rate limiter
+# would silently be unable to read X-RateLimit-*/Retry-After via fetch()'s
+# Response.headers without this.
 raw_app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_KEY_HEADER, API_KEY_HEADER_NAME],
+    expose_headers=[
+        RATE_LIMIT_LIMIT_HEADER,
+        RATE_LIMIT_REMAINING_HEADER,
+        RATE_LIMIT_RESET_HEADER,
+        "Retry-After",
+    ],
 )
 
 @raw_app.get("/health", tags=["Infrastructure Monitoring"])
