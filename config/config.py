@@ -197,6 +197,34 @@ RATE_LIMIT_KEY_TTL_SECONDS = int(os.getenv("RATE_LIMIT_KEY_TTL_SECONDS", "600"))
 # capacity to configure, only where to connect.
 EVENTS_REDIS_URL = os.getenv("EVENTS_REDIS_URL", "redis://localhost:6379/3")
 
+# GET /api/v1/reports/{id}/stream subscribes to the channel above and
+# forwards what it hears as Server-Sent Events. Whenever this
+# many seconds pass with nothing to forward, it sends a bare SSE comment
+# line as a heartbeat (ignored by EventSource, never surfaced to a
+# listener) - long enough not to spam an otherwise-quiet connection (one
+# parallel-researcher step alone can run tens of seconds with no event at
+# all), short enough to stay comfortably under a typical proxy/load-
+# balancer idle-connection timeout (commonly 30-60s) that would otherwise
+# silently kill the stream long before the run finishes.
+SSE_HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("SSE_HEARTBEAT_INTERVAL_SECONDS", "15"))
+
+# A node reaching a terminal per-node status (COMPLETED/FAILED) live, over
+# the channel above, does not necessarily mean investment_requests.status
+# has *already* been updated to match: orchestration/run_recorder.py's
+# _persist_success()/_mark_failed() write that job-level status in a
+# separate step that runs after the graph's astream loop has fully exited -
+# a handful of milliseconds after the *last* node's own per-node event was
+# already published (see _run_and_record()'s own control flow). These two
+# small numbers bound how long GET /api/v1/reports/{id}/stream polls
+# Postgres after seeing such an event before concluding the job genuinely
+# isn't done yet and going back to listening - the same eventual-consistency
+# bridge poll_until_terminal() already builds at a much coarser grain,
+# scaled down here because a live event is what tells us exactly when to
+# start checking, instead of blind interval polling from the moment a job
+# is enqueued.
+SSE_TERMINAL_POLL_ATTEMPTS = int(os.getenv("SSE_TERMINAL_POLL_ATTEMPTS", "10"))
+SSE_TERMINAL_POLL_INTERVAL_SECONDS = float(os.getenv("SSE_TERMINAL_POLL_INTERVAL_SECONDS", "0.05"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
