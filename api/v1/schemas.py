@@ -127,6 +127,46 @@ class AccessTokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class AgentRunSnapshot(BaseModel):
+    """One node's currently known state, as read straight from the
+    agent_runs table - one entry of ReportStreamSnapshot.agent_runs. `node`
+    (not `node_name`, db/models.py's own column name) so a client can treat
+    this the same way it treats a live event/schemas.py ProgressEvent's own
+    `node` field, without needing two different key names for "which agent"
+    depending on whether it learned about it from the snapshot or live."""
+
+    node: str
+    status: JobStatus
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
+class ReportStreamSnapshot(BaseModel):
+    """First event (`event: snapshot`) on GET /api/v1/reports/{id}/stream -
+    every node's currently known state, reconstructed from Postgres rather
+    than replayed from Redis: events/publisher.py's progress events are
+    deliberately ephemeral, so there is no history sitting anywhere to
+    replay from the pub/sub side. This is what lets a client
+    connecting mid-run, or after the job already finished, see accurate
+    current state instead of being left to guess what happened before it
+    subscribed."""
+
+    agent_runs: List[AgentRunSnapshot]
+
+
+class ReportStreamStatus(BaseModel):
+    """Final event (`event: status`) on the same stream - the job-level
+    outcome, sent exactly once, right before the stream ends. A per-node
+    ProgressEvent's own `status` (event: progress) only ever describes one
+    node, never the job as a whole, so this is the only place a client
+    learns the run is over, without needing to know anything about
+    graph.py's topology (e.g. which node happens to run last)."""
+
+    id: uuid.UUID
+    status: JobStatus
+
+
 class ReportListResponse(BaseModel):
     """`total` is the full matching count regardless of `limit`/`offset`, so
     a client can compute how many pages remain without a second request."""
