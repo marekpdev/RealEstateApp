@@ -156,6 +156,12 @@ services:
       - TASK_RETRY_BACKOFF_MAX_SECONDS
       - DEAD_LETTER_QUEUE_NAME
       - TASK_FAILURE_INJECTION_COUNT
+      # Only this service ever runs the graph (generate_report, via
+      # orchestration/run_recorder.py) and therefore ever publishes a
+      # progress event - web_app and beat don't need this, the same
+      # "only who actually uses it" reasoning RATE_LIMIT_REDIS_URL above
+      # already applies (there, in reverse: only web_app needs it).
+      - EVENTS_REDIS_URL=redis://redis:6379/3
 
   beat:
     build: .

@@ -9,6 +9,7 @@ from config import config
 from db.enums import JobStatus
 from db.repositories import InvestmentRequestRepository
 from db.session import dispose_engine, session_scope
+from events.redis_client import dispose_events_redis_client
 from orchestration.run_recorder import run_claimed_request
 from scripts.sync_knowledge_base import sync_azure_to_pinecone
 from worker.celery_app import celery_app
@@ -166,6 +167,11 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
     reaching run_claimed_request), not just successful ones - a retried
     attempt gets its own fresh asyncio.run() call from Celery too, so it
     needs the same clean slate the very first attempt does.
+    dispose_events_redis_client() runs alongside it for the identical
+    reason: run_claimed_request() -> orchestration/run_recorder.py's
+    _run_and_record() now also builds an async Redis client (events/
+    redis_client.py's own lazy singleton) bound to this same loop, to
+    publish progress events as the graph runs.
 
     Retries and the dead-letter queue: see this task's autoretry_for/
     retry_backoff/retry_jitter/max_retries decorator arguments and
@@ -201,6 +207,7 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
             return outcome.status.value
         finally:
             await dispose_engine()
+            await dispose_events_redis_client()
 
     return asyncio.run(_run())
 

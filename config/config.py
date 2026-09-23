@@ -185,6 +185,18 @@ RATE_LIMIT_REFILL_PER_SECOND = float(os.getenv("RATE_LIMIT_REFILL_PER_SECOND", "
 # leave one key per caller sitting in Redis forever once they stop calling.
 RATE_LIMIT_KEY_TTL_SECONDS = int(os.getenv("RATE_LIMIT_KEY_TTL_SECONDS", "600"))
 
+# --- Progress events (Redis pub/sub) ---------------------------------------
+# Channel job:{request_id} carries a structured event (see events/schemas.py)
+# at each point orchestration/run_recorder.py writes an agent_runs row - a
+# node dispatched, completed, or failed. A separate logical Redis DB from the
+# Celery broker (0), result backend (1) and rate limiter (2), for the same
+# reason those three are split from each other above: PUBLISH/SUBSCRIBE
+# traffic has nothing to do with any of them, even though all four point at
+# the same physical Redis server by default. Unlike those three, nothing is
+# ever stored here under a key - a channel isn't a key, so there's no TTL or
+# capacity to configure, only where to connect.
+EVENTS_REDIS_URL = os.getenv("EVENTS_REDIS_URL", "redis://localhost:6379/3")
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
