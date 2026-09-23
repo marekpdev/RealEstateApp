@@ -1,4 +1,6 @@
+import asyncio
 import contextlib
+import json
 import uuid
 from unittest.mock import patch
 
@@ -10,6 +12,8 @@ from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
 from db.models import AgentRun, InvestmentRequest, Report
 from db.repositories import InvestmentRequestRepository, ReportRepository
+from events.publisher import channel_name
+from events.redis_client import get_events_redis_client
 from orchestration.run_recorder import (
     claim_request,
     execute_and_record,
@@ -135,6 +139,90 @@ async def test_execute_and_record_full_offline_run(db_session, offline_graph):
     # Backfilled from ingest_input_agent's output mid-run, not known at claim time.
     assert request.city == "Los Angeles, CA"
     assert request.budget == "$800,000"
+
+
+@pytest.mark.asyncio
+async def test_run_claimed_request_publishes_progress_events_for_every_agent_run(
+    db_session, offline_graph
+):
+    """The end-to-end proof this module's progress-event publishing exists
+    for: subscribing to job:{request_id} before the run starts shows the
+    expected event
+    sequence - one RUNNING then one COMPLETED event per graph node, in one
+    strictly increasing sequence shared across the whole run, matching
+    exactly the six agent_runs rows test_execute_and_record_full_offline_run
+    already proves get written. Subscribes *before* run_claimed_request()
+    starts, on purpose: events/publisher.py's own docstring explains that a
+    subscriber connecting after a node's event already fired would simply
+    never see it (Redis pub/sub remembers nothing) - this test would flake
+    under exactly that gap if the subscription raced the run instead of
+    strictly preceding it."""
+    key = _unique_key()
+    claim = await claim_request(
+        DEMO_USER_ID, key, "Invest in Austin, TX up to $900,000"
+    )
+
+    client = get_events_redis_client()
+    pubsub = client.pubsub()
+    await pubsub.subscribe(channel_name(claim.request_id))
+    await pubsub.get_message(timeout=1)  # the "subscribe" confirmation itself
+
+    events = []
+
+    async def _collect() -> None:
+        async for message in pubsub.listen():
+            if message["type"] != "message":
+                continue
+            events.append(json.loads(message["data"]))
+            if len(events) >= 12:
+                return
+
+    collector = asyncio.create_task(_collect())
+    try:
+        async with respx.mock:
+            outcome = await run_claimed_request(
+                "Invest in Austin, TX up to $900,000", claim.request_id, 20
+            )
+        await asyncio.wait_for(collector, timeout=5)
+    finally:
+        await pubsub.unsubscribe(channel_name(claim.request_id))
+        await pubsub.aclose()
+
+    assert outcome.status == JobStatus.COMPLETED
+
+    all_nodes = {
+        "ingest_input_agent", "supervisor_agent", "market_data_agent",
+        "neighborhood_vibe_agent", "zoning_law_agent", "financial_modeler_agent",
+    }
+    assert len(events) == 12  # 6 nodes x (RUNNING + COMPLETED)
+    assert all(event["request_id"] == str(claim.request_id) for event in events)
+    assert all(event["schema_version"] == 1 for event in events)
+
+    sequences = [event["sequence"] for event in events]
+    assert sequences == list(range(1, 13))  # one shared, strictly increasing counter
+
+    by_node_status = {(event["node"], event["status"]) for event in events}
+    assert {node for node, _ in by_node_status} == all_nodes
+    running_seq = {
+        e["node"]: e["sequence"] for e in events if e["status"] == JobStatus.RUNNING.value
+    }
+    completed_seq = {
+        e["node"]: e["sequence"] for e in events if e["status"] == JobStatus.COMPLETED.value
+    }
+    assert running_seq.keys() == all_nodes
+    assert completed_seq.keys() == all_nodes
+    for node in all_nodes:
+        assert running_seq[node] < completed_seq[node]
+
+    # The graph's own topology (ingest_input -> supervisor -> fan-out ->
+    # financial_modeler) forces these two boundaries regardless of however
+    # the three parallel researchers happen to interleave in between.
+    assert (events[0]["node"], events[0]["status"]) == (
+        "ingest_input_agent", JobStatus.RUNNING.value
+    )
+    assert (events[-1]["node"], events[-1]["status"]) == (
+        "financial_modeler_agent", JobStatus.COMPLETED.value
+    )
 
 
 @pytest.mark.asyncio

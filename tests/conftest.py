@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import db.session as db_session_module
 from config import config
+from events.redis_client import dispose_events_redis_client
 from schema.state import OverallGraphState
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -32,6 +33,31 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 @pytest.fixture
 def mock_state():
     return OverallGraphState()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_events_redis_client_after_test():
+    """events/redis_client.py's async singleton, like db/session.py's own
+    engine, is only safe to dispose from the same event loop that built it.
+    Every async test in this suite shares one session-scoped loop (this
+    file's asyncio_default_fixture_loop_scope setting), but a plain
+    synchronous test elsewhere (worker/tasks.py's generate_report, called
+    directly - see tests/test_worker.py) opens its own fresh loop via
+    asyncio.run() and disposes whatever it built inside that same call.
+    Without this fixture, an async test that causes orchestration/
+    run_recorder.py to publish a progress event (building the client on the
+    shared session loop - e.g. tests/test_run_recorder.py's own progress-
+    events test) would leave it cached there; the next sync test's dispose
+    call would then try to close a connection bound to a different,
+    still-open loop and crash with the exact "Future attached to a
+    different loop" failure db/session.py's own engine already has to guard
+    against - confirmed by dropping this fixture and running the suite,
+    which reproduced precisely that crash in tests/test_worker.py.
+    Disposing here, after every async test, keeps the singleton always torn
+    down in the same loop that created it before any other test - sync or
+    async - can inherit it."""
+    yield
+    await dispose_events_redis_client()
 
 
 @pytest.fixture(autouse=True)

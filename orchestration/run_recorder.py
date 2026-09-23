@@ -1,8 +1,9 @@
 import asyncio
+import itertools
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, NamedTuple, Optional, Set, Tuple
+from typing import Dict, Iterator, NamedTuple, Optional, Set, Tuple
 
 from langchain_core.messages import HumanMessage
 
@@ -16,6 +17,7 @@ from db.repositories import (
     hash_request_payload,
 )
 from db.session import session_scope
+from events.publisher import publish_progress_event
 from graph import NODE_REGISTRY, compiledStateGraph
 
 
@@ -281,22 +283,31 @@ async def _run_and_record(
     completed_nodes: Set[str] = set()
     city_budget_persisted = False
     final_values: Optional[dict] = None
+    # One monotonically increasing counter per run, shared across every
+    # progress event this run publishes to channel job:{request_id} (see
+    # events/publisher.py) - a node dispatched (RUNNING), completed
+    # (COMPLETED), or left unfinished by a failure (FAILED) all draw from
+    # the same sequence, so a subscriber sees one ordered stream per run
+    # rather than three independently-numbered ones.
+    sequence: Iterator[int] = itertools.count(1)
 
     try:
         async for mode, chunk in compiledStateGraph.astream(
             inputs, config=run_config, stream_mode=["debug", "updates", "values"]
         ):
             if mode == "debug":
-                await _handle_debug_chunk(chunk, request_id, step_started_at, started_nodes)
+                await _handle_debug_chunk(
+                    chunk, request_id, step_started_at, started_nodes, sequence
+                )
             elif mode == "updates":
-                completed_nodes |= await _handle_updates_chunk(chunk, request_id)
+                completed_nodes |= await _handle_updates_chunk(chunk, request_id, sequence)
             elif mode == "values":
                 final_values = chunk
                 city_budget_persisted = await _maybe_backfill_city_budget(
                     chunk, request_id, city_budget_persisted
                 )
     except Exception as exc:
-        await _mark_failed(request_id, started_nodes, completed_nodes, str(exc))
+        await _mark_failed(request_id, started_nodes, completed_nodes, str(exc), sequence)
         return RunOutcome(request_id=request_id, status=JobStatus.FAILED, report=None, replayed=False)
 
     status, report = await _persist_success(request_id, final_values or {})
@@ -308,6 +319,7 @@ async def _handle_debug_chunk(
     request_id: uuid.UUID,
     step_started_at: Dict[int, datetime],
     started_nodes: Dict[str, datetime],
+    sequence: Iterator[int],
 ) -> None:
     """"tasks" events fire at superstep dispatch, before any node's async
     body actually runs - correct to treat as "started". But LangGraph calls
@@ -339,9 +351,18 @@ async def _handle_debug_chunk(
             status=JobStatus.RUNNING,
             started_at=started_at,
         )
+    await publish_progress_event(
+        request_id=request_id,
+        node=node_name,
+        status=JobStatus.RUNNING,
+        sequence=next(sequence),
+        timestamp=started_at,
+    )
 
 
-async def _handle_updates_chunk(chunk: dict, request_id: uuid.UUID) -> Set[str]:
+async def _handle_updates_chunk(
+    chunk: dict, request_id: uuid.UUID, sequence: Iterator[int]
+) -> Set[str]:
     """stream_mode="updates" emits once per task as it completes, so a
     chunk here carries exactly one node key in the common case - except the
     three parallel researchers, which arrive as three separate chunks, each
@@ -362,6 +383,13 @@ async def _handle_updates_chunk(chunk: dict, request_id: uuid.UUID) -> Set[str]:
                 completed_at=completed_at,
                 output=_serialize_node_output(payload),
             )
+        await publish_progress_event(
+            request_id=request_id,
+            node=node_name,
+            status=JobStatus.COMPLETED,
+            sequence=next(sequence),
+            timestamp=completed_at,
+        )
         completed.add(node_name)
     return completed
 
@@ -392,6 +420,7 @@ async def _mark_failed(
     started_nodes: Dict[str, datetime],
     completed_nodes: Set[str],
     error_message: str,
+    sequence: Iterator[int],
 ) -> None:
     """A failed node emits no "updates" chunk at all - the exception
     propagates straight out of the astream() loop instead. So the only way
@@ -413,6 +442,15 @@ async def _mark_failed(
                 error_message=error_message,
             )
         await InvestmentRequestRepository(session).update_status(request_id, JobStatus.FAILED)
+    for node_name in unfinished:
+        await publish_progress_event(
+            request_id=request_id,
+            node=node_name,
+            status=JobStatus.FAILED,
+            sequence=next(sequence),
+            timestamp=now,
+            error_message=error_message,
+        )
 
 
 async def _persist_success(

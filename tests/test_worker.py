@@ -190,6 +190,29 @@ def test_generate_report_disposes_the_db_engine_after_each_run():
     mock_dispose.assert_awaited_once()
 
 
+def test_generate_report_disposes_the_events_redis_client_after_each_run():
+    """The same regression this file already guards for db/session.py's
+    engine (test_generate_report_disposes_the_db_engine_after_each_run),
+    extended to events/redis_client.py's own async singleton:
+    run_claimed_request() now builds one too, bound to this
+    call's asyncio.run() loop, and it must be disposed inside the same
+    finally block before that loop closes - or the next task's
+    get_events_redis_client() would hand back a client whose connections
+    belong to an already-closed loop."""
+    request_id = uuid.uuid4()
+    fake_outcome = RunOutcome(
+        request_id=request_id, status=JobStatus.COMPLETED, report=None, replayed=False
+    )
+    with patch(
+        "worker.tasks.run_claimed_request", new_callable=AsyncMock, return_value=fake_outcome
+    ), patch(
+        "worker.tasks.dispose_events_redis_client", new_callable=AsyncMock
+    ) as mock_dispose:
+        generate_report("Invest in Austin, TX", str(request_id), 20)
+
+    mock_dispose.assert_awaited_once()
+
+
 def test_generate_report_configured_with_retry_backoff_and_jitter():
     """The decorator arguments themselves - asserted directly on the task
     object rather than by observing a real retry (that's covered by the
