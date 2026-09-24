@@ -5,6 +5,7 @@ import redis
 from celery import Task
 from celery.utils.log import get_task_logger
 
+from cache.redis_client import dispose_cache_redis_client
 from config import config
 from db.enums import JobStatus
 from db.repositories import InvestmentRequestRepository
@@ -171,7 +172,12 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
     reason: run_claimed_request() -> orchestration/run_recorder.py's
     _run_and_record() now also builds an async Redis client (events/
     redis_client.py's own lazy singleton) bound to this same loop, to
-    publish progress events as the graph runs.
+    publish progress events as the graph runs. dispose_cache_redis_client()
+    joins them for the same reason again: the graph's
+    market_data_agent node calls services/market_data_gateway.py's
+    fetch_market_metrics(), which now checks/populates the market-data
+    cache-aside layer (cache/market_data_cache.py) through its own lazy
+    async Redis singleton (cache/redis_client.py) bound to this same loop.
 
     Retries and the dead-letter queue: see this task's autoretry_for/
     retry_backoff/retry_jitter/max_retries decorator arguments and
@@ -208,6 +214,7 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
         finally:
             await dispose_engine()
             await dispose_events_redis_client()
+            await dispose_cache_redis_client()
 
     return asyncio.run(_run())
 

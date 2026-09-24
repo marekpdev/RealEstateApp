@@ -24,6 +24,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import db.session as db_session_module
+from cache.redis_client import dispose_cache_redis_client
 from config import config
 from events.redis_client import dispose_events_redis_client
 from resilience.circuit_breaker import reset_circuit_breakers
@@ -61,6 +62,17 @@ async def _dispose_events_redis_client_after_test():
     await dispose_events_redis_client()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_cache_redis_client_after_test():
+    """cache/redis_client.py's async singleton is the same shape as events/
+    redis_client.py's own (see that fixture's docstring just above for the
+    full loop-boundary reasoning) - disposing it here, after every async
+    test, keeps it from ever being inherited by a later sync test that
+    disposes things from a different, fresh asyncio.run() loop."""
+    yield
+    await dispose_cache_redis_client()
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limit_buckets():
     """Every test in this suite shares one real Redis instance (this
@@ -85,6 +97,29 @@ def _reset_rate_limit_buckets():
         yield
     finally:
         client.close()
+
+@pytest.fixture(autouse=True)
+def _reset_market_data_cache():
+    """Every test in this suite shares one real Redis instance (this
+    project always tests against real Postgres and real Redis, never mocks)
+    - without this, a cache entry or hit/miss counter one test populates
+    (e.g. test_market_data_cache.py, or test_api_clients.py's own vendor
+    tests, which now go through the cache-aside path too) would leak into a
+    later, unrelated test that happens to query the same normalized
+    location string, or that asserts on the raw hit/miss counters. The same
+    isolation goal _reset_rate_limit_buckets above already serves for the
+    rate limiter's own Redis-backed state, applied here to a different
+    logical DB."""
+    client = redis.Redis.from_url(config.CACHE_REDIS_URL)
+    try:
+        for key in client.scan_iter(match="market_data_cache:*"):
+            client.delete(key)
+        yield
+    finally:
+        for key in client.scan_iter(match="market_data_cache:*"):
+            client.delete(key)
+        client.close()
+
 
 @pytest.fixture(autouse=True)
 def _reset_circuit_breakers():

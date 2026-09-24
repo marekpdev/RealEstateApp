@@ -263,6 +263,51 @@ SSE_HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("SSE_HEARTBEAT_INTERVAL_SECONDS
 SSE_TERMINAL_POLL_ATTEMPTS = int(os.getenv("SSE_TERMINAL_POLL_ATTEMPTS", "10"))
 SSE_TERMINAL_POLL_INTERVAL_SECONDS = float(os.getenv("SSE_TERMINAL_POLL_INTERVAL_SECONDS", "0.05"))
 
+# --- Cache-aside for market data (Redis) ------------------------------------
+# services/market_data_gateway.py wraps RapidAPI's per-location market
+# lookup in a cache-aside pattern (see cache/market_data_cache.py): a caller
+# always checks Redis first, and only calls the vendor - the expensive, paid
+# step - on a genuine miss, writing the result back with a TTL before
+# returning it. A separate logical Redis DB from the broker (0), result
+# backend (1), rate limiter (2) and events channel (3) above, for the same
+# reason those are split from each other: a query pattern scoped to this
+# cache (SCAN/flush in tests, the eviction-policy reasoning below) should
+# never see, or wipe, an unrelated concern's keys, even though all five
+# point at the same physical Redis server by default.
+CACHE_REDIS_URL = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379/4")
+# How long a cached market-data result is trusted before a fresh vendor call
+# is required again. TTL is the entire invalidation strategy here: nothing
+# in this app ever writes new market data on a schedule independent of a
+# read, so there's no write-side event to invalidate on - only staleness to
+# bound. 15 minutes balances "listings genuinely don't move minute to
+# minute" against "don't let a real investment decision be made on an
+# hour-stale price".
+MARKET_DATA_CACHE_TTL_SECONDS = int(os.getenv("MARKET_DATA_CACHE_TTL_SECONDS", "900"))
+# A cache miss acquires this single-flight lock (SET NX EX - the same
+# compare-and-delete-release pattern worker/tasks.py's sync_knowledge_base
+# lock already uses) before calling the vendor, so N concurrent misses for
+# the same location produce one vendor call, not N - see
+# cache/market_data_cache.py's own docstring for the full cache-stampede
+# reasoning. Sized comfortably above API_CLIENT_RETRY_BUDGET_SECONDS (the
+# longest a single vendor call can legitimately take once retries are
+# counted) so the lock can never expire out from under a caller still
+# genuinely working, and self-heals (rather than wedging every future call)
+# if that caller crashes instead of releasing it.
+MARKET_DATA_CACHE_LOCK_TTL_SECONDS = int(os.getenv("MARKET_DATA_CACHE_LOCK_TTL_SECONDS", "30"))
+# A caller that loses the single-flight race polls the cache this many
+# times, this many seconds apart, waiting for the lock holder to populate it
+# - the same bounded-poll shape SSE_TERMINAL_POLL_ATTEMPTS/
+# SSE_TERMINAL_POLL_INTERVAL_SECONDS above already use for a different
+# eventual-consistency gap. If the wait is exhausted (the lock holder is
+# unusually slow, or died without releasing), this caller falls back to
+# fetching from the vendor itself rather than waiting indefinitely - an
+# extra vendor call in that rare worst case beats a caller that never
+# returns.
+MARKET_DATA_CACHE_LOCK_WAIT_ATTEMPTS = int(os.getenv("MARKET_DATA_CACHE_LOCK_WAIT_ATTEMPTS", "20"))
+MARKET_DATA_CACHE_LOCK_WAIT_INTERVAL_SECONDS = float(
+    os.getenv("MARKET_DATA_CACHE_LOCK_WAIT_INTERVAL_SECONDS", "0.25")
+)
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
