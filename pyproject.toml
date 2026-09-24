@@ -30,6 +30,7 @@ dependencies = [
     "celery[redis]>=5.5.0",
     "pyjwt>=2.9.0",
     "bcrypt>=4.1.0",
+    "tenacity>=9.1.4",
 ]
 
 [tool.pytest.ini_options]
