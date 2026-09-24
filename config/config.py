@@ -128,6 +128,26 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 JWT_REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_MINUTES", "10080"))  # 7 days
 
+# --- Vendor HTTP client retries --------------------------------------------
+# services/base_api_client.py retries a vendor call only on a genuinely
+# transient condition: a connection/timeout error, HTTP 429, or any 5xx.
+# Every other 4xx means the request itself was wrong (a bad query, a bad
+# auth header, ...) - resending it unchanged would just fail the exact same
+# way again, so those fail on the first attempt instead of being retried.
+# API_CLIENT_MAX_ATTEMPTS bounds the attempt count; API_CLIENT_RETRY_BUDGET_SECONDS
+# separately bounds total wall-clock time spent retrying (a "retry budget") -
+# whichever limit is hit first ends the loop, so a slow vendor can't stall a
+# caller indefinitely just because the attempt count hasn't run out yet.
+API_CLIENT_MAX_ATTEMPTS = int(os.getenv("API_CLIENT_MAX_ATTEMPTS", "4"))
+# Full-jitter exponential backoff between attempts (tenacity's
+# wait_random_exponential): each wait is a random value between 0 and an
+# exponentially widening cap (multiplier * 2**attempt, capped at max), not a
+# fixed exponential delay - so many callers backing off from the same
+# outage at once don't all retry in lockstep.
+API_CLIENT_RETRY_BACKOFF_BASE_SECONDS = float(os.getenv("API_CLIENT_RETRY_BACKOFF_BASE_SECONDS", "0.5"))
+API_CLIENT_RETRY_BACKOFF_MAX_SECONDS = float(os.getenv("API_CLIENT_RETRY_BACKOFF_MAX_SECONDS", "8.0"))
+API_CLIENT_RETRY_BUDGET_SECONDS = float(os.getenv("API_CLIENT_RETRY_BUDGET_SECONDS", "20.0"))
+
 # --- CORS ----------------------------------------------------------------
 # Comma-separated exact origins (scheme + host + port) allowed to make
 # cross-origin browser requests against this API, e.g.
