@@ -1,8 +1,11 @@
+import asyncio
+
 import pytest
 import respx
 import httpx
 from unittest.mock import patch
 from fastapi import HTTPException
+from resilience.circuit_breaker import CircuitState, get_circuit_breaker
 from services.base_api_client import BaseAPIClient
 from services.market_data_gateway import RapidRealEstateMarketClient
 
@@ -21,6 +24,21 @@ def _fast_backoff():
         "services.base_api_client.config",
         API_CLIENT_RETRY_BACKOFF_BASE_SECONDS=0.001,
         API_CLIENT_RETRY_BACKOFF_MAX_SECONDS=0.001,
+    )
+
+
+# Circuit breaker tests patch resilience.circuit_breaker.config directly -
+# get_circuit_breaker() reads it once, lazily, the moment a given name's
+# breaker is first constructed (unlike the retry policy above, a breaker
+# has to keep its state across calls, so its config can't be re-read fresh
+# on every call the way the stateless retry policy's can). Each test uses
+# a base_url unique to itself so the per-test conftest breaker-registry
+# reset never has to worry about ordering between tests.
+def _breaker_config(failure_threshold=2, reset_timeout_seconds=999.0):
+    return patch.multiple(
+        "resilience.circuit_breaker.config",
+        CIRCUIT_BREAKER_FAILURE_THRESHOLD=failure_threshold,
+        CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS=reset_timeout_seconds,
     )
 
 
@@ -142,6 +160,102 @@ async def test_base_api_client_retries_connection_error_then_succeeds():
 
             assert result == {"status": "ok"}
             assert route.call_count == 2
+
+@pytest.mark.asyncio
+async def test_base_api_client_circuit_breaker_opens_and_skips_the_network():
+    """A persistently-down vendor must trip the breaker after
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD calls, and every call made while it's
+    open must fail immediately with the vendor never contacted again."""
+    async with httpx.AsyncClient() as httpx_client:
+        client = BaseAPIClient(client=httpx_client, base_url="https://api.breaker-open-test")
+
+        async with respx.mock:
+            route = respx.get("https://api.breaker-open-test/down")
+            route.respond(status_code=503, text="Service Unavailable")
+
+            with patch("config.config.OFFLINE_MODE", False), \
+                 _fast_backoff(), \
+                 patch("services.base_api_client.config.API_CLIENT_MAX_ATTEMPTS", 1), \
+                 _breaker_config(failure_threshold=2):
+                for _ in range(2):
+                    with pytest.raises(HTTPException) as excinfo:
+                        await client._send_request("GET", "/down")
+                    assert excinfo.value.status_code == 503
+                assert route.call_count == 2
+
+                breaker = get_circuit_breaker("https://api.breaker-open-test")
+                assert breaker.state == CircuitState.OPEN
+
+                with pytest.raises(HTTPException) as excinfo:
+                    await client._send_request("GET", "/down")
+                assert excinfo.value.status_code == 503
+                assert "Circuit breaker" in excinfo.value.detail
+                assert route.call_count == 2  # unchanged - no new request was sent
+
+
+@pytest.mark.asyncio
+async def test_base_api_client_circuit_breaker_ignores_client_errors():
+    """A non-429 4xx is the caller's own fault, not a sign the vendor is
+    unhealthy - it must never count toward tripping the breaker, however
+    many times it happens."""
+    async with httpx.AsyncClient() as httpx_client:
+        client = BaseAPIClient(client=httpx_client, base_url="https://api.breaker-4xx-test")
+
+        async with respx.mock:
+            route = respx.get("https://api.breaker-4xx-test/bad")
+            route.respond(status_code=400, text="Bad Request")
+
+            with patch("config.config.OFFLINE_MODE", False), \
+                 patch("services.base_api_client.config.API_CLIENT_MAX_ATTEMPTS", 5), \
+                 _breaker_config(failure_threshold=1):
+                for _ in range(3):
+                    with pytest.raises(HTTPException) as excinfo:
+                        await client._send_request("GET", "/bad")
+                    assert excinfo.value.status_code == 400
+
+                breaker = get_circuit_breaker("https://api.breaker-4xx-test")
+                assert breaker.state == CircuitState.CLOSED
+                assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_base_api_client_circuit_breaker_recovers_via_half_open():
+    """Once reset_timeout_seconds has passed, exactly one probe call must
+    reach the vendor - and a successful probe must close the breaker again."""
+    async with httpx.AsyncClient() as httpx_client:
+        client = BaseAPIClient(client=httpx_client, base_url="https://api.breaker-recovery-test")
+
+        async with respx.mock:
+            route = respx.get("https://api.breaker-recovery-test/flaky")
+            route.respond(status_code=503)
+
+            with patch("config.config.OFFLINE_MODE", False), \
+                 _fast_backoff(), \
+                 patch("services.base_api_client.config.API_CLIENT_MAX_ATTEMPTS", 1), \
+                 _breaker_config(failure_threshold=1, reset_timeout_seconds=0.05):
+                with pytest.raises(HTTPException):
+                    await client._send_request("GET", "/flaky")
+                assert route.call_count == 1
+
+                # Still within the reset window - refused without a new request.
+                with pytest.raises(HTTPException) as excinfo:
+                    await client._send_request("GET", "/flaky")
+                assert "Circuit breaker" in excinfo.value.detail
+                assert route.call_count == 1
+
+                await asyncio.sleep(0.06)
+
+                # Half-open: the one probe reaches the vendor, and it succeeds.
+                route.respond(status_code=200, json={"status": "ok"})
+                result = await client._send_request("GET", "/flaky")
+                assert result == {"status": "ok"}
+                assert route.call_count == 2
+
+                # Closed again - normal calls keep flowing.
+                result = await client._send_request("GET", "/flaky")
+                assert result == {"status": "ok"}
+                assert route.call_count == 3
+
 
 @pytest.mark.asyncio
 async def test_base_api_client_mock_fixture(tmp_path):
