@@ -1,9 +1,17 @@
 import asyncio
+import json
+from typing import Optional
 
 import chainlit as cl
 from config import config
 from db.enums import JobStatus
-from logger.logger import log_message, render_financial_report
+from logger.logger import (
+    log_agent_content,
+    log_agent_footer,
+    log_agent_header,
+    log_message,
+    render_financial_report,
+)
 from services.report_api_client import ReportAPIError, get_client
 
 @cl.on_chat_start
@@ -82,23 +90,67 @@ async def handle_query(raw_query: str, *, idempotency_key: str) -> None:
 async def _submit_and_await(raw_query: str, idempotency_key: str) -> dict:
     """POSTs the request to /api/v1/reports (a fast call: one idempotent
     insert-or-select behind the scenes, same as before - see that route's
-    own docstring), then polls GET /api/v1/reports/{id} until it reaches a
-    terminal status or REPORT_POLL_TIMEOUT_SECONDS elapses. Postgres is no
-    longer something this process talks to directly for any of this - the
-    API is the only channel now, exactly as an external client would use
-    it."""
+    own docstring), then watches GET /api/v1/reports/{id}/stream, rendering
+    each agent's progress live as it arrives, until the stream reports the
+    job as terminal or REPORT_POLL_TIMEOUT_SECONDS elapses without one.
+    Either way, a final GET /api/v1/reports/{id} is what this actually
+    returns - the stream's own terminal `status` event never carries the
+    finished report's content (see api/v1/schemas.py's ReportStreamStatus:
+    id and status only), so one plain GET is still how the content itself
+    is fetched, exactly as the old poll loop's last iteration already did.
+    Postgres is still never something this process talks to directly for
+    any of this - the API is the only channel, exactly as an external
+    client would use it."""
     client = get_client()
     accepted = await client.create_report(raw_query, idempotency_key)
-    return await _poll_until_terminal(client, accepted["id"])
+    request_id = accepted["id"]
+    try:
+        await asyncio.wait_for(
+            _await_report(client, request_id), timeout=config.REPORT_POLL_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        pass
+    return await client.get_report(request_id)
 
 
-async def _poll_until_terminal(client, request_id: str) -> dict:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + config.REPORT_POLL_TIMEOUT_SECONDS
-    while True:
-        detail = await client.get_report(request_id)
-        if detail["status"] in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
-            return detail
-        if loop.time() >= deadline:
-            return detail
-        await asyncio.sleep(config.REPORT_POLL_INTERVAL_SECONDS)
+async def _await_report(client, request_id: str) -> None:
+    """Consumes GET /api/v1/reports/{id}/stream and renders each event as a
+    live Chainlit step: `snapshot` reconstructs whatever already happened
+    before this connection opened (a replayed request can already be
+    mid-run, or even finished - see api/v1/reports.py's own
+    ReportStreamSnapshot), `progress` renders each node's own start/finish
+    the instant it actually happens, and `status` (the job-level outcome)
+    ends this function - there is nothing further worth reading off the
+    stream itself once the job is over."""
+    async for event_name, data in client.stream_report(request_id):
+        if event_name == "snapshot":
+            for entry in json.loads(data)["agent_runs"]:
+                await _render_node_state(
+                    entry["node"], entry["status"], entry.get("error_message")
+                )
+        elif event_name == "progress":
+            payload = json.loads(data)
+            await _render_node_state(
+                payload["node"], payload["status"], payload.get("error_message")
+            )
+        elif event_name == "status":
+            return
+
+
+async def _render_node_state(node: str, node_status: str, error_message: Optional[str]) -> None:
+    """Opens (or, if already open from an earlier event for this same node,
+    no-ops on) a Chainlit step the moment a node starts, and closes it the
+    moment it reaches a terminal status - mirroring exactly how agents/*.py
+    itself used to render these steps back when the graph ran inline in
+    this same process. The graph now runs in a separate Celery worker
+    process with no live Chainlit session to render into (see
+    logger/logger.py's own render-as-side-effect trap), so this is now the
+    only place any of that live step rendering can actually reach a real
+    user - driven by what this stream reports, not by importing the graph
+    or the agents that run inside it."""
+    title = f"⚙️ Node: {node.replace('_', ' ').title()}"
+    await log_agent_header(node, title)
+    if node_status == JobStatus.FAILED.value and error_message:
+        await log_agent_content(node, f"❌ {error_message}")
+    if node_status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
+        await log_agent_footer(node)

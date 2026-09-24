@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -7,6 +7,45 @@ from config import config
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 _UNAUTHORIZED = 401
+
+
+class _StreamUnauthorized(Exception):
+    """Raised internally by _open_stream() when the streaming connection's
+    own status line comes back 401 - a streaming response has no single
+    buffered Response object to hand _raise_for_status() the way every
+    other call here gets, since its body is what's still being read when
+    the status line arrives. This never escapes stream_report() itself; it
+    exists only to signal "refresh/re-login and retry the connection once"
+    to the same method's own outer try/except, mirroring
+    _authorized_request()'s identical contract for ordinary calls."""
+
+
+async def _iter_sse_events(lines: AsyncIterator[str]) -> AsyncIterator[Tuple[str, str]]:
+    """Turns a raw line-by-line SSE body into (event, data) pairs - the
+    client-side mirror of api/v1/reports.py's own three-line `_sse()`
+    writer: an `event: <name>` line, one or more `data: <line>` lines, then
+    the blank line marking one event's end. A line starting with ":" (the
+    bare `: heartbeat` comment that endpoint sends every
+    SSE_HEARTBEAT_INTERVAL_SECONDS to defeat idle proxy timeouts) carries no
+    event of its own and is silently dropped here, exactly as a browser's
+    own EventSource already would - this app never had a reason to surface
+    it to anything downstream."""
+    event_name = "message"
+    data_lines: List[str] = []
+    async for line in lines:
+        if line == "":
+            if data_lines:
+                yield event_name, "\n".join(data_lines)
+            event_name = "message"
+            data_lines = []
+        elif line.startswith(":"):
+            continue
+        elif line.startswith("event:"):
+            event_name = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:"):].strip())
+    if data_lines:
+        yield event_name, "\n".join(data_lines)
 
 
 class ReportAPIError(RuntimeError):
@@ -68,6 +107,52 @@ class ReportAPIClient:
         `report` is None until `status` reaches "completed"."""
         response = await self._authorized_request("GET", f"/api/v1/reports/{request_id}")
         return response.json()
+
+    async def stream_report(self, request_id: str) -> AsyncIterator[Tuple[str, str]]:
+        """GET /api/v1/reports/{id}/stream, yielding (event, data) pairs as
+        they arrive on the open connection - app.py's replacement for its
+        earlier poll-until-terminal loop (see app.py's own
+        _await_report()). `event` is one of "snapshot",
+        "progress" or "status" (api/v1/reports.py's own three event types);
+        `data` is that event's still-serialized JSON payload, deliberately
+        left unparsed here - parsing it is app.py's job, the same
+        "work off the raw HTTP response, don't import the internal schema"
+        line create_report()/get_report() already draw.
+
+        Same login-once, refresh-or-relogin-and-retry-once contract as
+        _authorized_request(), reimplemented here rather than reused: a
+        streaming response's own auth failure is only visible from its
+        status line, the instant the connection opens - there is no single,
+        fully-buffered Response for _authorized_request()'s own retry logic
+        to inspect the way every other call here gets one."""
+        if self._access_token is None:
+            await self._login()
+        try:
+            async for item in self._open_stream(request_id):
+                yield item
+        except _StreamUnauthorized:
+            try:
+                if self._refresh_token is not None:
+                    await self._refresh()
+                else:
+                    await self._login()
+            except ReportAPIError:
+                await self._login()
+            async for item in self._open_stream(request_id):
+                yield item
+
+    async def _open_stream(self, request_id: str) -> AsyncIterator[Tuple[str, str]]:
+        headers = {"Authorization": f"Bearer {self._access_token}"}
+        async with self._http.stream(
+            "GET", f"/api/v1/reports/{request_id}/stream", headers=headers
+        ) as response:
+            if response.status_code == _UNAUTHORIZED:
+                raise _StreamUnauthorized()
+            if response.status_code >= 400:
+                await response.aread()
+                _raise_for_status(response)
+            async for event in _iter_sse_events(response.aiter_lines()):
+                yield event
 
     async def _authorized_request(
         self,
