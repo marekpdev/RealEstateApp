@@ -148,6 +148,23 @@ API_CLIENT_RETRY_BACKOFF_BASE_SECONDS = float(os.getenv("API_CLIENT_RETRY_BACKOF
 API_CLIENT_RETRY_BACKOFF_MAX_SECONDS = float(os.getenv("API_CLIENT_RETRY_BACKOFF_MAX_SECONDS", "8.0"))
 API_CLIENT_RETRY_BUDGET_SECONDS = float(os.getenv("API_CLIENT_RETRY_BUDGET_SECONDS", "20.0"))
 
+# --- Per-upstream circuit breakers -----------------------------------------
+# resilience/circuit_breaker.py keeps one named breaker per external
+# dependency (RapidAPI, Pinecone - never one shared/global breaker, so a
+# struggling vendor can't block calls to a healthy one). A breaker only
+# counts a call as a failure when the vendor itself looks unhealthy
+# (its retry budget above was fully exhausted, or a raw connection error) -
+# a caller's own bad request (a non-429 4xx) never counts, since that's not
+# a signal the upstream is down. CIRCUIT_BREAKER_FAILURE_THRESHOLD
+# consecutive failures trip a breaker open, so every subsequent call fails
+# immediately with no network call at all until CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS
+# has passed, at which point exactly one probe call is let through to test
+# whether the vendor has recovered. One process-wide policy shared by every
+# named breaker, the same single-global-policy tradeoff already accepted
+# for API_CLIENT_* above.
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5"))
+CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS = float(os.getenv("CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS", "30.0"))
+
 # --- CORS ----------------------------------------------------------------
 # Comma-separated exact origins (scheme + host + port) allowed to make
 # cross-origin browser requests against this API, e.g.

@@ -13,6 +13,7 @@ from tenacity import (
 from config import config
 from config.safety import assert_online_call_allowed
 from logger.logger import log_agent_content
+from resilience.circuit_breaker import CircuitBreakerOpenError, get_circuit_breaker
 
 
 class _RetryableVendorStatus(Exception):
@@ -63,6 +64,18 @@ class BaseAPIClient:
         assert_online_call_allowed(f"BaseAPIClient -> {self.base_url}{endpoint}")
         url = f"{self.base_url}{endpoint}"
 
+        # One breaker per upstream, keyed by base_url (RapidAPI's is the
+        # only production caller today, but any future BaseAPIClient
+        # subclass with a distinct base_url gets its own breaker for free,
+        # never sharing state with an unrelated vendor). before_call()
+        # never touches the network - it either returns immediately or
+        # raises, which is what makes "fail fast while open" actually fast.
+        breaker = get_circuit_breaker(self.base_url or "base-api-client-default")
+        try:
+            breaker.before_call()
+        except CircuitBreakerOpenError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+
         # Only a connection/timeout error (httpx.TransportError) or a
         # response _attempt() below flags via _RetryableVendorStatus (429,
         # or any 5xx) is retried. wait_random_exponential is tenacity's
@@ -101,11 +114,23 @@ class BaseAPIClient:
         try:
             response = await retryer(_attempt)
         except _RetryableVendorStatus as exc:
+            # The retry budget above was fully exhausted on a 429/5xx - the
+            # vendor itself looks unhealthy, so this counts against the
+            # breaker.
+            breaker.record_failure()
             if exc.status_code == 429:
                 raise HTTPException(status_code=429, detail="Vendor API threshold exhausted (HTTP 429).")
             raise HTTPException(status_code=exc.status_code, detail=f"Vendor failure downstream: {exc.body}")
         except httpx.RequestError as exc:
+            breaker.record_failure()
             raise HTTPException(status_code=503, detail=f"Gateway routing communication outage: {exc}")
+
+        # A response was received at all, healthy or not - that's the
+        # breaker's success signal. A non-429 4xx below is the caller's own
+        # bad request, not a sign the vendor is unhealthy, so it still
+        # counts as a successful call from the breaker's point of view;
+        # only "the vendor never gave back a usable response" trips it.
+        breaker.record_success()
 
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code,

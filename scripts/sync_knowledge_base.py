@@ -8,7 +8,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from config.config import MOCK_KNOWLEDGE_BASE_SYNC
-from services.vector_store import get_pinecone_vector_store
+from resilience.circuit_breaker import get_circuit_breaker
+from services.vector_store import PINECONE_CIRCUIT_BREAKER_NAME, get_pinecone_vector_store
 
 
 def _mock_sync_result() -> dict:
@@ -97,8 +98,20 @@ def sync_azure_to_pinecone() -> dict:
 
     # 4. Push directly to Pinecone Cloud Server Infrastructure
     if all_chunks:
+        # Shares one breaker with tools/vector_tools.py's read path - both
+        # sides of the same upstream (Pinecone), so a scheduled sync that's
+        # failing repeatedly also fails fast instead of retrying a doomed
+        # upload on every Beat tick, and vice versa.
+        breaker = get_circuit_breaker(PINECONE_CIRCUIT_BREAKER_NAME)
+        breaker.before_call()
+
         print(f"📤 Generating embeddings and uploading {len(all_chunks)} chunks to Pinecone...")
-        vectorstore.add_documents(all_chunks)
+        try:
+            vectorstore.add_documents(all_chunks)
+        except Exception:
+            breaker.record_failure()
+            raise
+        breaker.record_success()
         print("✨ Database completely synchronized with Azure Cloud Storage!")
     else:
         print("🤷 No PDFs found in your Azure storage container.")

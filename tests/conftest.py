@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import db.session as db_session_module
 from config import config
 from events.redis_client import dispose_events_redis_client
+from resilience.circuit_breaker import reset_circuit_breakers
 from schema.state import OverallGraphState
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -84,6 +85,23 @@ def _reset_rate_limit_buckets():
         yield
     finally:
         client.close()
+
+@pytest.fixture(autouse=True)
+def _reset_circuit_breakers():
+    """resilience/circuit_breaker.py's per-name registry is an in-memory,
+    process-wide singleton dict, the same shape as db/session.py's engine
+    or events/redis_client.py's client - so without this, one test tripping
+    a breaker (e.g. RapidAPI's, keyed by its base_url) would leave it open
+    for whichever unrelated test happens to run next and share that same
+    key, exactly the cross-test leakage _reset_rate_limit_buckets already
+    guards against for Redis-backed state. Resetting before *and* after
+    keeps a test's own breaker state from both inheriting a previous test's
+    trip and leaking into the next one.
+    """
+    reset_circuit_breakers()
+    yield
+    reset_circuit_breakers()
+
 
 @pytest.fixture
 def mock_llm():

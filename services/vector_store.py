@@ -3,6 +3,13 @@ from langchain_pinecone import PineconeVectorStore
 from config.config import PINECONE_API_KEY, PINECONE_INDEX_NAME, OPENAI_API_KEY
 from config.safety import guarded_httpx_clients
 
+# Shared by every caller of a Pinecone-backed vectorstore built here
+# (tools/vector_tools.py's read path, scripts/sync_knowledge_base.py's
+# write path) so both sides of this one upstream trip and recover through
+# the same resilience.circuit_breaker.CircuitBreaker instance, never two
+# separate breakers for the same vendor.
+PINECONE_CIRCUIT_BREAKER_NAME = "pinecone"
+
 def get_pinecone_vector_store():
     """
     Initializes and returns a PineconeVectorStore instance.
