@@ -33,12 +33,15 @@ def _unique_key(label: str) -> str:
 
 @pytest.fixture(autouse=True)
 def fast_polling():
-    """Both the inlined "worker" (run_claimed_request(), patched exactly
-    like tests/test_app_wiring.py's own fixture of this name) and app.py's
-    own HTTP poll loop need a fast interval, or these tests would run at
-    real time (config.py's 1s/300s production defaults)."""
+    """The inlined "worker" (run_claimed_request(), patched exactly like
+    tests/test_app_wiring.py's own fixture of this name) still needs a fast
+    poll interval for cli.py-style callers; app.py itself no longer polls at
+    all (see services/report_api_client.py's stream_report()), but still
+    needs a short overall deadline - REPORT_POLL_TIMEOUT_SECONDS is now the
+    budget app.py's asyncio.wait_for() gives the whole stream before giving
+    up - or these tests would run at real time (config.py's 1s/300s
+    production defaults)."""
     with patch("orchestration.run_recorder.config.REPORT_POLL_INTERVAL_SECONDS", 0.01), \
-         patch("app.config.REPORT_POLL_INTERVAL_SECONDS", 0.01), \
          patch("app.config.REPORT_POLL_TIMEOUT_SECONDS", 2.0):
         yield
 
@@ -85,11 +88,21 @@ def _inline_worker():
     tests/test_api_reports.py's _inline_generate_report(): captures (not
     schedules) the exact continuation a real worker/tasks.py's
     generate_report task calls, then runs it to completion synchronously
-    before app.py's own first poll - never concurrently with it, since both
-    would otherwise open competing SAVEPOINTs on the one connection
+    before app.py's own stream connects - never concurrently with it, since
+    both would otherwise open competing SAVEPOINTs on the one connection
     tests/conftest.py's db_session fixture rebinds every session_scope()
     call to (see either sibling fixture's own docstring for the full
-    argument)."""
+    argument). A side effect worth naming: by the time app._await_report()
+    actually opens GET .../stream below, the job is already fully
+    COMPLETED/FAILED in Postgres, so the real SSE endpoint answers with its
+    already-terminal snapshot+status shortcut (api/v1/reports.py's own
+    `if job_status in _TERMINAL_STATUSES` branch) rather than ever entering
+    its live per-node loop - correctness here (the right rows land in
+    Postgres, the right message reaches the user) is what these tests prove;
+    genuinely live, progressive rendering was verified manually instead,
+    against real separate uvicorn and Celery worker processes - the same
+    split tests/test_api_reports_stream.py already draws for the identical
+    reason."""
     pending_run: dict = {}
 
     def _fake_delay(raw_query: str, request_id: str, recursion_limit: int):
@@ -97,16 +110,16 @@ def _inline_worker():
             raw_query, uuid.UUID(request_id), recursion_limit
         )
 
-    real_poll_until_terminal = app._poll_until_terminal
+    real_await_report = app._await_report
 
-    async def _run_worker_then_poll(client, request_id):
+    async def _run_worker_then_await(client, request_id):
         coro = pending_run.pop("coro", None)
         if coro is not None:
             await coro
-        return await real_poll_until_terminal(client, request_id)
+        return await real_await_report(client, request_id)
 
     with patch("api.v1.reports.generate_report") as mock_task, \
-         patch.object(app, "_poll_until_terminal", side_effect=_run_worker_then_poll):
+         patch.object(app, "_await_report", side_effect=_run_worker_then_await):
         mock_task.delay.side_effect = _fake_delay
         yield mock_task
 
@@ -138,6 +151,43 @@ async def test_handle_query_persists_full_run_through_the_real_api(
         await db_session.execute(select(Report).where(Report.request_id == request.id))
     ).scalars().all()
     assert len(reports) == 1
+
+
+@pytest.mark.asyncio
+async def test_handle_query_full_run_renders_one_step_per_agent_node(
+    db_session, offline_graph, bound_report_api_client
+):
+    """app.py no longer polls GET /api/v1/reports/{id} in a loop - it
+    watches GET /api/v1/reports/{id}/stream and renders each node's
+    progress as a Chainlit step (see app._render_node_state()). Under
+    _inline_worker() the six-node graph has already finished by the time
+    the stream connects (see that fixture's own docstring for why), so this
+    proves the stream's `event: snapshot` path - reconstructed from
+    Postgres - drives the same rendering a genuinely live `event: progress`
+    would; that live path itself is exercised directly by
+    test_await_report_renders_progress_events_as_they_arrive below, and end
+    to end only by manual verification against real separate uvicorn and
+    Celery worker processes."""
+    key = _unique_key("api-client-step-rendering")
+
+    with patch("app.log_agent_header", new_callable=AsyncMock) as mock_header, \
+         patch("app.log_agent_footer", new_callable=AsyncMock) as mock_footer, \
+         _inline_worker():
+        async with respx.mock:
+            await app.handle_query(
+                "Invest in Austin, TX up to $900,000", idempotency_key=key
+            )
+
+    rendered_nodes = {call.args[0] for call in mock_header.await_args_list}
+    assert rendered_nodes == {
+        "ingest_input_agent",
+        "supervisor_agent",
+        "market_data_agent",
+        "neighborhood_vibe_agent",
+        "zoning_law_agent",
+        "financial_modeler_agent",
+    }
+    assert mock_footer.await_count == len(rendered_nodes)
 
 
 @pytest.mark.asyncio
@@ -308,6 +358,90 @@ async def test_handle_query_surfaces_a_connection_failure_instead_of_crashing():
     assert "Couldn't reach the API" in mock_log.await_args.args[0]
 
 
+# --- app.py's SSE consumer, in isolation ------------------------------------
+# These exercise app._await_report()/app._render_node_state() directly
+# against a fake stream_report() async generator, rather than a real
+# GET .../stream connection - precise control over the exact event sequence
+# (including a genuinely *live* progress event, arriving after the snapshot)
+# that would otherwise need a real concurrent worker publishing while this
+# same process reads, which tests/conftest.py's shared-connection db_session
+# fixture can't safely do inside one test (see _inline_worker()'s own
+# docstring above for the full argument).
+
+
+async def _fake_stream(events):
+    for event_name, data in events:
+        yield event_name, data
+
+
+@pytest.mark.asyncio
+async def test_await_report_renders_progress_events_as_they_arrive():
+    """A fresh job's stream: an empty snapshot (nothing has run yet), then
+    one node's own RUNNING followed by COMPLETED - exactly the live shape a
+    real worker publishes while this generator is still connected, not a
+    replayed snapshot. _await_report() must render each one as it arrives
+    and stop the moment `status` ends the run, without needing a final GET
+    itself (that's _submit_and_await()'s job, one layer up)."""
+    events = [
+        ("snapshot", '{"agent_runs": []}'),
+        (
+            "progress",
+            '{"node": "ingest_input_agent", "status": "running"}',
+        ),
+        (
+            "progress",
+            '{"node": "ingest_input_agent", "status": "completed"}',
+        ),
+        ("status", '{"id": "abc", "status": "completed"}'),
+    ]
+    fake_client = AsyncMock()
+    fake_client.stream_report = lambda request_id: _fake_stream(events)
+
+    with patch("app.log_agent_header", new_callable=AsyncMock) as mock_header, \
+         patch("app.log_agent_footer", new_callable=AsyncMock) as mock_footer:
+        await app._await_report(fake_client, "abc")
+
+    # log_agent_header() is called once per progress event for this node
+    # (RUNNING, then COMPLETED) - it's the real function's own job (see
+    # logger/logger.py's active_agent_steps dict) to no-op the second call
+    # since the step is already open; _render_node_state() doesn't dedupe
+    # this itself, so both calls land on the mock here.
+    assert mock_header.await_count == 2
+    mock_header.assert_awaited_with("ingest_input_agent", "⚙️ Node: Ingest Input Agent")
+    mock_footer.assert_awaited_once_with("ingest_input_agent")
+
+
+@pytest.mark.asyncio
+async def test_render_node_state_opens_header_only_while_running():
+    with patch("app.log_agent_header", new_callable=AsyncMock) as mock_header, \
+         patch("app.log_agent_footer", new_callable=AsyncMock) as mock_footer:
+        await app._render_node_state("market_data_agent", "running", None)
+
+    mock_header.assert_awaited_once_with("market_data_agent", "⚙️ Node: Market Data Agent")
+    mock_footer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_render_node_state_closes_the_step_on_completion():
+    with patch("app.log_agent_header", new_callable=AsyncMock) as mock_header, \
+         patch("app.log_agent_footer", new_callable=AsyncMock) as mock_footer:
+        await app._render_node_state("market_data_agent", "completed", None)
+
+    mock_header.assert_awaited_once()
+    mock_footer.assert_awaited_once_with("market_data_agent")
+
+
+@pytest.mark.asyncio
+async def test_render_node_state_shows_the_error_before_closing_on_failure():
+    with patch("app.log_agent_header", new_callable=AsyncMock), \
+         patch("app.log_agent_content", new_callable=AsyncMock) as mock_content, \
+         patch("app.log_agent_footer", new_callable=AsyncMock) as mock_footer:
+        await app._render_node_state("zoning_law_agent", "failed", "boom")
+
+    mock_content.assert_awaited_once_with("zoning_law_agent", "❌ boom")
+    mock_footer.assert_awaited_once_with("zoning_law_agent")
+
+
 # --- ReportAPIClient: login/refresh/retry mechanics, in isolation ----------
 # These don't go through the real FastAPI app at all - a fake base_url with
 # respx intercepting every call gives precise control over the exact
@@ -404,6 +538,102 @@ async def test_client_raises_report_api_error_with_detail_on_conflict():
 
     assert excinfo.value.status_code == 409
     assert "different request body" in excinfo.value.detail
+
+
+@pytest.mark.asyncio
+async def test_iter_sse_events_parses_events_and_skips_heartbeat_comments():
+    """The client-side mirror of api/v1/reports.py's own _sse() writer and
+    its `: heartbeat` comment line - both must round-trip through this
+    parser exactly, since it's the only thing standing between the raw wire
+    bytes and app._await_report()'s json.loads() calls."""
+    from services.report_api_client import _iter_sse_events
+
+    async def _lines():
+        for line in [
+            "event: snapshot",
+            'data: {"agent_runs": []}',
+            "",
+            ": heartbeat",
+            "event: progress",
+            'data: {"node": "ingest_input_agent", "status": "running"}',
+            "",
+            "event: status",
+            'data: {"id": "abc", "status": "completed"}',
+            "",
+        ]:
+            yield line
+
+    events = [event async for event in _iter_sse_events(_lines())]
+
+    assert events == [
+        ("snapshot", '{"agent_runs": []}'),
+        ("progress", '{"node": "ingest_input_agent", "status": "running"}'),
+        ("status", '{"id": "abc", "status": "completed"}'),
+    ]
+
+
+def _sse_body(*events) -> bytes:
+    """Builds a raw SSE response body from (event, data) pairs, matching
+    api/v1/reports.py's own _sse() wire format exactly."""
+    return "".join(f"event: {name}\ndata: {data}\n\n" for name, data in events).encode()
+
+
+@pytest.mark.asyncio
+async def test_stream_report_yields_parsed_events_over_a_real_connection():
+    async with httpx.AsyncClient(base_url=_FAKE_BASE_URL) as http_client:
+        client = ReportAPIClient(http_client)
+        async with respx.mock:
+            respx.post(f"{_FAKE_BASE_URL}/api/v1/auth/login").respond(
+                json={"access_token": "at", "refresh_token": "rt", "token_type": "bearer"}
+            )
+            respx.get(f"{_FAKE_BASE_URL}/api/v1/reports/abc/stream").respond(
+                200,
+                content=_sse_body(
+                    ("snapshot", '{"agent_runs": []}'),
+                    ("status", '{"id": "abc", "status": "completed"}'),
+                ),
+                headers={"content-type": "text/event-stream"},
+            )
+
+            events = [event async for event in client.stream_report("abc")]
+
+    assert events == [
+        ("snapshot", '{"agent_runs": []}'),
+        ("status", '{"id": "abc", "status": "completed"}'),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stream_report_refreshes_an_expired_access_token_and_retries():
+    """Same contract as test_client_refreshes_an_expired_access_token_and_
+    retries above, for the streaming call - a 401 on the connection's own
+    status line, discovered before any SSE body is read, triggers a
+    refresh and exactly one retried connection attempt."""
+    async with httpx.AsyncClient(base_url=_FAKE_BASE_URL) as http_client:
+        client = ReportAPIClient(http_client)
+        client._access_token = "stale-token"
+        client._refresh_token = "rt-1"
+
+        async with respx.mock:
+            refresh_route = respx.post(f"{_FAKE_BASE_URL}/api/v1/auth/refresh").respond(
+                json={"access_token": "fresh-token", "token_type": "bearer"}
+            )
+            login_route = respx.post(f"{_FAKE_BASE_URL}/api/v1/auth/login")
+            stream_route = respx.get(f"{_FAKE_BASE_URL}/api/v1/reports/abc/stream")
+            stream_route.side_effect = [
+                httpx.Response(401, json={"detail": "Token expired."}),
+                httpx.Response(
+                    200,
+                    content=_sse_body(("status", '{"id": "abc", "status": "completed"}')),
+                    headers={"content-type": "text/event-stream"},
+                ),
+            ]
+
+            events = [event async for event in client.stream_report("abc")]
+
+    assert events == [("status", '{"id": "abc", "status": "completed"}')]
+    assert refresh_route.call_count == 1
+    assert login_route.call_count == 0
 
 
 @pytest.mark.asyncio

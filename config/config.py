@@ -35,14 +35,15 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:63
 
 # The graph now runs inside a Celery worker process, not inline in the
 # request handler - cli.py enqueues the work directly and polls the
-# investment_requests row itself; app.py enqueues and polls too, but only
-# ever through its own HTTP calls to GET /api/v1/reports/{id} (see
-# services/report_api_client.py), never by touching the row directly. Both
-# still share the same poll_interval/timeout values so their behavior is
-# observably identical from a user's point of view. poll_interval trades
-# responsiveness for load (a database read for cli.py, an HTTP request for
-# app.py); timeout is a safety net so a caller never waits forever on a job
-# whose worker died without reaching a terminal status.
+# investment_requests row itself, on this interval, as a safety net so it
+# never waits forever on a job whose worker died without reaching a
+# terminal status. app.py no longer polls at all (see
+# services/report_api_client.py's stream_report() - it watches
+# GET /api/v1/reports/{id}/stream instead) so REPORT_POLL_INTERVAL_SECONDS
+# is cli.py/orchestration.run_recorder-only now; REPORT_POLL_TIMEOUT_SECONDS
+# stays shared - app.py reuses it as the overall deadline it'll wait on that
+# stream before giving up, the exact same "don't wait forever" role it
+# already plays for cli.py's polling loop.
 REPORT_POLL_INTERVAL_SECONDS = float(os.getenv("REPORT_POLL_INTERVAL_SECONDS", "1.0"))
 REPORT_POLL_TIMEOUT_SECONDS = float(os.getenv("REPORT_POLL_TIMEOUT_SECONDS", "300"))
 
