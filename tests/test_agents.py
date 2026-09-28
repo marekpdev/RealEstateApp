@@ -127,5 +127,41 @@ async def test_zoning_law_agent_node(mock_state):
         mock_get_agent.return_value = mock_agent
         with patch("agents.zoning_law.MOCK_ZONING_LAW_AGENT_OUTPUT", False):
             result = await zoning_law_agent_node(mock_state)
-                
+
     assert result["zoning_laws"] == mock_output
+
+
+@pytest.mark.asyncio
+async def test_get_compiled_zoning_agent_uses_dense_only_tool_by_default():
+    import agents.zoning_law as zoning_law_module
+
+    zoning_law_module._COMPILED_ZONING_AGENT = None
+    with patch("agents.zoning_law.UnifiedMCPGateway.get_tools", new_callable=AsyncMock) as mock_get_tools, \
+         patch("agents.zoning_law.create_agent") as mock_create_agent, \
+         patch("agents.zoning_law.HYBRID_RETRIEVAL_ENABLED", False):
+        mock_get_tools.return_value = []
+        await zoning_law_module._get_compiled_zoning_agent()
+
+    tool_names = [t.name for t in mock_create_agent.call_args.kwargs["tools"]]
+    assert "search_zoning_laws" in tool_names
+    assert "search_zoning_laws_hybrid" not in tool_names
+    assert "'search_zoning_laws'" in mock_create_agent.call_args.kwargs["system_prompt"]
+    zoning_law_module._COMPILED_ZONING_AGENT = None
+
+
+@pytest.mark.asyncio
+async def test_get_compiled_zoning_agent_uses_hybrid_tool_when_enabled():
+    import agents.zoning_law as zoning_law_module
+
+    zoning_law_module._COMPILED_ZONING_AGENT = None
+    with patch("agents.zoning_law.UnifiedMCPGateway.get_tools", new_callable=AsyncMock) as mock_get_tools, \
+         patch("agents.zoning_law.create_agent") as mock_create_agent, \
+         patch("agents.zoning_law.HYBRID_RETRIEVAL_ENABLED", True):
+        mock_get_tools.return_value = []
+        await zoning_law_module._get_compiled_zoning_agent()
+
+    tool_names = [t.name for t in mock_create_agent.call_args.kwargs["tools"]]
+    assert "search_zoning_laws_hybrid" in tool_names
+    assert "search_zoning_laws" not in tool_names
+    assert "'search_zoning_laws_hybrid'" in mock_create_agent.call_args.kwargs["system_prompt"]
+    zoning_law_module._COMPILED_ZONING_AGENT = None

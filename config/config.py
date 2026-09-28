@@ -308,6 +308,34 @@ MARKET_DATA_CACHE_LOCK_WAIT_INTERVAL_SECONDS = float(
     os.getenv("MARKET_DATA_CACHE_LOCK_WAIT_INTERVAL_SECONDS", "0.25")
 )
 
+# --- Hybrid retrieval (dense + lexical, fused with RRF) --------------------
+# tools/hybrid_retrieval_tools.py's search_zoning_laws_hybrid fuses
+# Pinecone's existing dense vector search with Postgres's own lexical
+# full-text search (db/repositories/document_chunk_repository.py's
+# search_lexical(), backed by the document_chunks table) via Reciprocal
+# Rank Fusion, instead of relying on dense search alone. Off by default so
+# the Zoning Law agent keeps using the plain dense-only search_zoning_laws
+# tool unchanged unless this is explicitly turned on - the point of a
+# config flag here is to let dense-only and hybrid be compared side by
+# side, not to silently replace one with the other.
+HYBRID_RETRIEVAL_ENABLED = get_env_bool("HYBRID_RETRIEVAL_ENABLED")
+# The k in RRF's score(d) = sum over each ranked list of 1 / (k + rank_i(d)):
+# a larger k flattens the gap between a rank-1 and a rank-10 hit, a smaller
+# k rewards a high rank much more steeply. 60 is both the value the
+# original RRF paper (Cormack, Clarke & Buettcher, 2009) found worked well
+# across its own benchmark collections, and the value this project's own
+# retrieval build note names directly.
+HYBRID_RETRIEVAL_RRF_K = int(os.getenv("HYBRID_RETRIEVAL_RRF_K", "60"))
+# How many candidates each side (dense, lexical) contributes before fusion
+# cuts the result down to HYBRID_RETRIEVAL_RESULTS. Deliberately larger than
+# the final result count - RRF needs each side's own internal ranking to
+# fuse against, not just its single best hit, or every item would trivially
+# tie at rank 1 with nothing left to fuse.
+HYBRID_RETRIEVAL_CANDIDATES_PER_SOURCE = int(os.getenv("HYBRID_RETRIEVAL_CANDIDATES_PER_SOURCE", "10"))
+# The final fused result count handed back to the agent - matches the
+# existing dense-only search_zoning_laws's own k=3.
+HYBRID_RETRIEVAL_RESULTS = int(os.getenv("HYBRID_RETRIEVAL_RESULTS", "3"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
