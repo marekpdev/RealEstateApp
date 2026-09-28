@@ -2,10 +2,10 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from config import NodeName
-from config.config import MOCK_ZONING_LAW_AGENT_OUTPUT
+from config.config import HYBRID_RETRIEVAL_ENABLED, MOCK_ZONING_LAW_AGENT_OUTPUT
 from config.llm import base_model
 from schema.state import OverallGraphState, ZoningLawAgentOutput
-from tools import UnifiedMCPGateway, search_zoning_laws
+from tools import UnifiedMCPGateway, search_zoning_laws, search_zoning_laws_hybrid
 from logger.lmm_translator import LogType, compile_ui_log
 from logger.logger import log_agent_header, log_agent_content, log_agent_footer
 from utils.utils import print_model, load_mock_fixture
@@ -28,27 +28,41 @@ async def _get_compiled_zoning_agent():
         server_ids=["brave_search", "fetch_service"],
     )
 
-    # 🌲 Pinecone Integration: Add the local vector search tool to the agent's arsenal.
-    # This allows the agent to query verified municipal records before falling back to the web.
-    tools_list.append(search_zoning_laws)
+    # 🌲 Vector/hybrid retrieval integration: add the local zoning-document
+    # search tool to the agent's arsenal, so it can query verified municipal
+    # records before falling back to the web. Which tool - dense-only
+    # (Pinecone alone) or hybrid (Pinecone + Postgres lexical, fused with
+    # RRF) - is picked once here, behind HYBRID_RETRIEVAL_ENABLED, so the
+    # two can be compared side by side without touching this agent's
+    # workflow instructions beyond the tool name they reference.
+    if HYBRID_RETRIEVAL_ENABLED:
+        tools_list.append(search_zoning_laws_hybrid)
+        primary_search_tool = "search_zoning_laws_hybrid"
+        primary_search_desc = "hybrid: Pinecone dense search + Postgres lexical full-text search, fused with Reciprocal Rank Fusion"
+    else:
+        tools_list.append(search_zoning_laws)
+        primary_search_tool = "search_zoning_laws"
+        primary_search_desc = "Pinecone dense vector search"
 
     system_instructions = (
         "You are an expert real estate compliance agent specializing in municipal zoning and land-use regulations. "
         "Your task is to research multi-family zoning rules for the city provided in the user message. "
         "This is a PET PROJECT; prioritize SPEED and SIMPLICITY over exhaustive research.\n\n"
         "⚠️ MANDATORY TOOL RULE:\n"
-        "1. PREFER VERIFIED DATA: You MUST execute 'search_zoning_laws' (Pinecone) first. This is our primary source of truth.\n"
-        "2. WEB FALLBACK: Only use 'brave_web_search' if 'search_zoning_laws' returns no results or insufficient data.\n"
+        f"1. PREFER VERIFIED DATA: You MUST execute '{primary_search_tool}' ({primary_search_desc}) first. "
+        "This is our primary source of truth.\n"
+        f"2. WEB FALLBACK: Only use 'brave_web_search' if '{primary_search_tool}' returns no results or insufficient data.\n"
         "3. SATISFACTION CRITERIA: As soon as you find ANY relevant zoning facts (even if incomplete), STOP and return them. "
         "Partial data is 100% acceptable. 'Good enough' is the goal.\n"
-        "4. SEARCH BUDGET: Strictly limit yourself to 1 'search_zoning_laws' call and 1 'brave_web_search' call. "
+        f"4. SEARCH BUDGET: Strictly limit yourself to 1 '{primary_search_tool}' call and 1 'brave_web_search' call. "
         "Do NOT refine queries or search again if the first search yielded any useful snippets.\n"
-        "5. FETCH BUDGET: Avoid 'fetch' if possible. Only fetch if both Pinecone and search snippets are empty. Max 1 fetch call.\n"
+        f"5. FETCH BUDGET: Avoid 'fetch' if possible. Only fetch if both '{primary_search_tool}' and search snippets are empty. "
+        "Max 1 fetch call.\n"
         "6. TOKEN ECONOMY: Stay within the 8000 token limit. Use 'count': 3 for searches.\n"
         "7. STOP CONDITION: Tool usage MUST cease as soon as you have a baseline understanding of the city's zoning.\n\n"
         "CRITICAL WORKFLOW:\n"
-        "1. Call 'search_zoning_laws' for the target city.\n"
-        "2. If Pinecone results are insufficient, call 'brave_web_search' once.\n"
+        f"1. Call '{primary_search_tool}' for the target city.\n"
+        f"2. If '{primary_search_tool}' results are insufficient, call 'brave_web_search' once.\n"
         "3. Review all findings and populate the structured output immediately.\n"
         "4. Finish immediately. Do not loop back for more precision."
     )
