@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Optional, List
 from fastapi import HTTPException
 import chainlit as cl
+from cache.market_data_cache import fetch_market_metrics_cache_aside
+from cache.redis_client import get_cache_redis_client
+from config import config
 from config.config import MOCK_MARKET_DATA_API, RAPIDAPI_KEY
+from logger.logger import log_agent_content
 from schema.market_data import RealEstateGatewayModel, PropertyRecord
 from services.base_api_client import BaseAPIClient
 
@@ -20,6 +24,25 @@ class RapidRealEstateMarketClient(BaseAPIClient):
         self.fixture_path = Path(__file__).parent.parent / "tests" / "fixtures" / "mock_rapidapi_listings.json"
 
     async def fetch_market_metrics(self, location_query: str) -> RealEstateGatewayModel:
+        """Cache-aside entrypoint: checks Redis first (cache/market_data_cache.py)
+        and only calls _fetch_market_metrics_uncached - the real vendor round
+        trip, including its own api_key/MOCK_MARKET_DATA_API guard - on a
+        genuine miss. A cache hit skips that guard entirely, the same way a
+        real cache hit needs no vendor credentials at all."""
+        cache_client = get_cache_redis_client()
+        outcome = await fetch_market_metrics_cache_aside(
+            cache_client,
+            location_query,
+            lambda: self._fetch_market_metrics_uncached(location_query),
+        )
+        if config.DEBUG_MODE:
+            await log_agent_content(
+                "MarketDataCache",
+                f"--- [CACHE {'HIT' if outcome.cache_hit else 'MISS'}] {location_query} ---",
+            )
+        return outcome.metrics
+
+    async def _fetch_market_metrics_uncached(self, location_query: str) -> RealEstateGatewayModel:
         if not self.api_key and not MOCK_MARKET_DATA_API:
             raise HTTPException(status_code=500, detail="Configuration Fault: Missing production RAPIDAPI_KEY.")
 

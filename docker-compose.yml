@@ -21,6 +21,26 @@ services:
     image: redis:7-alpine
     container_name: realestateapp_redis
     restart: unless-stopped
+    # maxmemory-policy is a server-wide setting, not per logical DB - this
+    # one Redis instance also backs the Celery broker (DB 0), result backend
+    # (DB 1), rate limiter (DB 2) and progress-event pub/sub (DB 3), none of
+    # which may ever be silently evicted. volatile-lru (evict the least-
+    # recently-used key *among those that have an expiry set*, once
+    # maxmemory is hit) is safe here specifically because it can
+    # structurally never touch the one thing that truly must never be
+    # evicted: a pending task's own broker queue entry is a plain Redis list
+    # push with no EXPIRE on it, so volatile-lru can't see it as a candidate
+    # at all. Everything volatile-lru *can* evict under pressure (a
+    # rate-limit bucket key, a finished Celery result past result_expires,
+    # this cache's own entries) degrades gracefully if lost - a rate-limit
+    # bucket just resets to full, an evicted Celery result is never read by
+    # this app's own code path (it polls Postgres, not the result backend),
+    # and an evicted cache entry is exactly a cache miss, the case
+    # cache/market_data_cache.py already handles as its normal path.
+    # allkeys-lru was rejected for the opposite reason: it would also be
+    # free to evict a broker/backend key that has no expiry, and there is no
+    # way to scope an eviction policy to one logical DB.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
     ports:
       - "6379:6379"
     healthcheck:
@@ -162,6 +182,14 @@ services:
       # "only who actually uses it" reasoning RATE_LIMIT_REDIS_URL above
       # already applies (there, in reverse: only web_app needs it).
       - EVENTS_REDIS_URL=redis://redis:6379/3
+      # Same "only who actually uses it" reasoning again: only this service
+      # ever calls services/market_data_gateway.py's fetch_market_metrics()
+      # (the market_data_agent node, inside the graph this service runs).
+      - CACHE_REDIS_URL=redis://redis:6379/4
+      - MARKET_DATA_CACHE_TTL_SECONDS
+      - MARKET_DATA_CACHE_LOCK_TTL_SECONDS
+      - MARKET_DATA_CACHE_LOCK_WAIT_ATTEMPTS
+      - MARKET_DATA_CACHE_LOCK_WAIT_INTERVAL_SECONDS
 
   beat:
     build: .
