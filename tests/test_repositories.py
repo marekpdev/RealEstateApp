@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from db.constants import DEMO_USER_ID
 from db.enums import JobStatus
-from db.models import AgentRun, InvestmentRequest, Report, User
+from db.models import AgentRun, DocumentChunk, InvestmentRequest, Report, User
 from db.repositories import (
     AgentRunRepository,
+    DocumentChunkRepository,
     InvestmentRequestRepository,
     ReportRepository,
     hash_request_payload,
@@ -331,3 +332,120 @@ async def test_increment_attempt_count_is_a_plain_atomic_increment(db_session):
 
     persisted = await db_session.get(InvestmentRequest, request.id, populate_existing=True)
     assert persisted.attempt_count == 3
+
+
+@pytest.mark.asyncio
+async def test_replace_all_inserts_the_given_chunks(db_session):
+    repo = DocumentChunkRepository(db_session)
+
+    count = await repo.replace_all([
+        {
+            "source_origin": "austin-zoning.pdf",
+            "page": 0,
+            "chunk_index": 0,
+            "content": "Ordinance 12-345 sets setback requirements for R-2 districts.",
+        },
+        {
+            "source_origin": "austin-zoning.pdf",
+            "page": 1,
+            "chunk_index": 1,
+            "content": "General discussion of neighborhood character.",
+        },
+    ])
+
+    assert count == 2
+    total = await db_session.scalar(select(func.count()).select_from(DocumentChunk))
+    assert total == 2
+
+
+@pytest.mark.asyncio
+async def test_replace_all_wipes_previously_synced_chunks(db_session):
+    """A second call must fully replace the first's rows, not append to
+    them - a resync always means "this is everything currently in Azure"
+    (see DocumentChunkRepository.replace_all's own docstring)."""
+    repo = DocumentChunkRepository(db_session)
+    await repo.replace_all([
+        {"source_origin": "stale.pdf", "page": 0, "chunk_index": 0, "content": "Old content."},
+    ])
+
+    count = await repo.replace_all([
+        {"source_origin": "fresh.pdf", "page": 0, "chunk_index": 0, "content": "New content."},
+    ])
+    await db_session.flush()
+
+    assert count == 1
+    results = await repo.search_lexical("content", k=10)
+    sources = {chunk.source_origin for chunk, _ in results}
+    assert sources == {"fresh.pdf"}
+
+
+@pytest.mark.asyncio
+async def test_search_lexical_ranks_the_best_match_first_and_respects_k(db_session):
+    repo = DocumentChunkRepository(db_session)
+    await repo.replace_all([
+        {
+            "source_origin": "austin-zoning.pdf",
+            "page": 0,
+            "chunk_index": 0,
+            "content": "setback setback setback requirements for residential districts.",
+        },
+        {
+            "source_origin": "dallas-zoning.pdf",
+            "page": 0,
+            "chunk_index": 0,
+            "content": "A single mention of setback requirements among many other zoning topics.",
+        },
+        {
+            "source_origin": "unrelated.pdf",
+            "page": 0,
+            "chunk_index": 0,
+            "content": "Discussion of parking minimums with no relevant term at all.",
+        },
+    ])
+
+    results = await repo.search_lexical("setback requirements", k=2)
+
+    assert len(results) == 2
+    top_chunk, top_rank = results[0]
+    assert top_chunk.source_origin == "austin-zoning.pdf"
+    assert top_rank >= results[1][1]
+    assert "unrelated.pdf" not in {chunk.source_origin for chunk, _ in results}
+
+
+@pytest.mark.asyncio
+async def test_search_lexical_matches_exact_hyphenated_ordinance_numbers(db_session):
+    """The exact-statutory-term case lexical search exists for: dense vector
+    retrieval handles rare tokens like an ordinance number poorly, but
+    Postgres full-text search finds it directly."""
+    repo = DocumentChunkRepository(db_session)
+    await repo.replace_all([
+        {
+            "source_origin": "austin-zoning.pdf",
+            "page": 4,
+            "chunk_index": 0,
+            "content": "Ordinance 12-345 regulates setback requirements citywide.",
+        },
+        {
+            "source_origin": "austin-zoning.pdf",
+            "page": 5,
+            "chunk_index": 1,
+            "content": "Ordinance 99-000 covers an entirely unrelated topic.",
+        },
+    ])
+
+    results = await repo.search_lexical("12-345", k=5)
+
+    assert len(results) == 1
+    assert results[0][0].page == 4
+
+
+@pytest.mark.asyncio
+async def test_search_lexical_returns_nothing_for_a_non_matching_query(db_session):
+    repo = DocumentChunkRepository(db_session)
+    await repo.replace_all([
+        {"source_origin": "austin-zoning.pdf", "page": 0, "chunk_index": 0, "content": "Zoning text."},
+    ])
+
+    results = await repo.search_lexical("nonexistent-term-xyz", k=5)
+
+    assert results == []

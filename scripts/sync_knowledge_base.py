@@ -1,6 +1,9 @@
 # file: scripts/sync_knowledge_base.py
+import asyncio
 import os
 import tempfile
+from collections import defaultdict
+from typing import List
 
 from azure.storage.blob import BlobServiceClient
 from pypdf import PdfReader
@@ -8,8 +11,65 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from config.config import MOCK_KNOWLEDGE_BASE_SYNC
+from db.repositories import DocumentChunkRepository
+from db.session import dispose_engine, session_scope
 from resilience.circuit_breaker import get_circuit_breaker
 from services.vector_store import PINECONE_CIRCUIT_BREAKER_NAME, get_pinecone_vector_store
+
+
+def _chunks_to_rows(chunks: List[Document]) -> List[dict]:
+    """Converts LangChain Documents into DocumentChunkRepository.replace_all()
+    rows, assigning each chunk a 0-based chunk_index scoped to its own
+    source_origin - the order they appear in `chunks` for a given source is
+    already this document's own reading order (RecursiveCharacterTextSplitter
+    preserves it), so a running per-source counter is enough; no need to sort
+    on page/offset first."""
+    counters: dict = defaultdict(int)
+    rows = []
+    for chunk in chunks:
+        source_origin = chunk.metadata["source_origin"]
+        rows.append(
+            {
+                "source_origin": source_origin,
+                "page": chunk.metadata["page"],
+                "chunk_index": counters[source_origin],
+                "content": chunk.page_content,
+            }
+        )
+        counters[source_origin] += 1
+    return rows
+
+
+def _sync_chunks_to_postgres(chunks: List[Document]) -> int:
+    """Replaces the entire document_chunks table (Postgres's lexical-search
+    half of retrieval) with the exact same chunks just produced for Pinecone
+    - see DocumentChunkRepository.replace_all() for why a full replace,
+    rather than an incremental upsert, is the correct semantics here.
+
+    Runs its own asyncio.run() call rather than making sync_azure_to_pinecone
+    itself async: this function's only two callers (this module's own
+    __main__ block and worker.tasks.sync_knowledge_base, a plain non-async
+    Celery task body) both call it from outside any already-running event
+    loop, the same precondition worker.tasks.generate_report's own
+    asyncio.run() call documents at length. dispose_engine() inside that same
+    call, before the loop closes, is required for the identical reason
+    (db/session.py's engine is a process-wide singleton whose pooled asyncpg
+    connections are bound to whichever loop built them) - without it, a
+    later task sharing this worker process (generate_report, or a second
+    Beat-scheduled sync) would inherit an engine bound to this call's
+    already-closed loop and fail with "Future attached to a different loop".
+    """
+
+    async def _run() -> int:
+        try:
+            async with session_scope() as session:
+                return await DocumentChunkRepository(session).replace_all(
+                    _chunks_to_rows(chunks)
+                )
+        finally:
+            await dispose_engine()
+
+    return asyncio.run(_run())
 
 
 def _mock_sync_result() -> dict:
@@ -96,7 +156,17 @@ def sync_azure_to_pinecone() -> dict:
         finally:
             os.remove(temp_pdf_path)
 
-    # 4. Push directly to Pinecone Cloud Server Infrastructure
+    # 4. Replace Postgres's lexical-search index with these same chunks -
+    # done before the Pinecone upload below, and unconditionally (even when
+    # all_chunks is empty, which correctly empties the table), so a Pinecone
+    # outage or an open circuit breaker never leaves the lexical half of
+    # retrieval stale: the two indexes are independent failure domains, the
+    # same per-upstream isolation principle the RapidAPI/Pinecone circuit
+    # breakers already established elsewhere in this codebase.
+    chunks_indexed_lexically = _sync_chunks_to_postgres(all_chunks)
+    print(f"📚 Lexical index (Postgres) now holds {chunks_indexed_lexically} chunks.")
+
+    # 5. Push directly to Pinecone Cloud Server Infrastructure
     if all_chunks:
         # Shares one breaker with tools/vector_tools.py's read path - both
         # sides of the same upstream (Pinecone), so a scheduled sync that's
