@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from sqlalchemy import (
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Index,
@@ -16,7 +17,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -228,4 +229,51 @@ class AgentRun(Base):
         # second one. request_id leads, so this is also the FK-covering index
         # for the same reason as investment_requests.user_id above.
         UniqueConstraint("request_id", "node_name"),
+    )
+
+
+class DocumentChunk(Base):
+    """One chunk of a source municipal PDF, lexically indexed for full-text
+    search - the Postgres half of the Zoning Law agent's retrieval, alongside
+    Pinecone's existing dense-vector half. Populated by
+    scripts/sync_knowledge_base.py from the exact same LangChain chunks it
+    already produces for Pinecone (same RecursiveCharacterTextSplitter
+    settings), so both retrieval paths see identical text units rather than
+    two independently-tuned chunkings that would make any future comparison
+    between them meaningless."""
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    # The originating blob's own name (e.g. "austin-zoning.pdf") - matches
+    # the Document.metadata["source_origin"] key sync_knowledge_base.py
+    # already attaches for Pinecone. VARCHAR, not a foreign key: the source
+    # of truth is Azure Blob Storage, not a table this app owns.
+    source_origin: Mapped[str] = mapped_column(String(500), nullable=False)
+    page: Mapped[int] = mapped_column(Integer, nullable=False)
+    # This chunk's 0-based position among every chunk from the same
+    # source_origin, in the order sync_knowledge_base.py produced them -
+    # RecursiveCharacterTextSplitter can split one page into several chunks,
+    # and this preserves their original reading order for a human looking at
+    # a search result in context.
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # A generated, stored column: Postgres derives and maintains this from
+    # `content` itself on every insert, so nothing has to remember to keep it
+    # in sync by hand. 'english' matches this app's documents (US municipal
+    # zoning/ordinance text) - the dictionary that drives stemming.
+    content_tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        # search_lexical()'s @@ match against content_tsv is a full inverted-
+        # index lookup, not a range scan - a GIN index is what makes that
+        # lookup sublinear instead of a sequential scan over every chunk.
+        Index("ix_document_chunks_content_tsv", "content_tsv", postgresql_using="gin"),
     )
