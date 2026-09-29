@@ -107,6 +107,19 @@ Required only when updating documents.
 uv run python scripts/sync_knowledge_base.py
 ```
 
+### Evaluate Retrieval Quality
+
+Scores dense/lexical/hybrid retrieval against a small hand-labelled query set
+and prints recall@k/MRR/nDCG@k for each - the actual defence against tuning
+retrieval by feel. Safe to run any time: it seeds its own synthetic corpus
+inside a transaction that's rolled back afterward, never touching the real
+synced `document_chunks` table.
+
+```bash
+uv run python scripts/evaluate_retrieval.py            # dense arm skipped if Pinecone isn't configured
+uv run python scripts/evaluate_retrieval.py --demo-dense  # stand-in dense arm, for a full worked example
+```
+
 ### Option 1: Running via CLI (Recommended for Development)
 
 #### Run Application
