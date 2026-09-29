@@ -49,6 +49,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot job: brings the database schema up to date, then exits. Every
+  # service that touches Postgres waits for it to finish successfully
+  # (condition: service_completed_successfully), so a fresh volume gets its
+  # tables before anything queries them and nobody has to remember a manual
+  # step. It is its own service rather than part of web_app's start command
+  # so that running several web_app replicas can't make them race to migrate
+  # at the same moment, and so a failed migration stops the stack loudly
+  # instead of leaving an app running against a half-migrated schema.
+  # Re-running it is harmless: `upgrade head` does nothing when the schema
+  # is already current.
+  migrate:
+    build: .
+    image: realestateapp:local
+    container_name: realestateapp_migrate
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/.venv
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DSN=postgresql+asyncpg://realestateapp:realestateapp@postgres:5432/realestateapp
+
   web_app:
     build: .
     image: realestateapp:local
@@ -58,6 +85,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # Not published to the host: NGINX (below) is the only way in from
     # outside the Compose network. expose: only documents the port for
     # other services on the network, it opens nothing on the host.
@@ -191,6 +220,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - .:/app
       - /app/.venv
