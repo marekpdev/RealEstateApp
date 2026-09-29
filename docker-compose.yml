@@ -58,8 +58,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8080:8080"
+    # Not published to the host: NGINX (below) is the only way in from
+    # outside the Compose network. expose: only documents the port for
+    # other services on the network, it opens nothing on the host.
+    expose:
+      - "8080"
+    # No curl in the slim runtime image, so probe with the interpreter the
+    # image already has. /health is the liveness endpoint (process up and
+    # serving); NGINX waits on this before it starts, since it resolves the
+    # upstream's name at startup and would exit if the name isn't there yet.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     # Compose's own name for what Kubernetes calls terminationGracePeriodSeconds
     # (see k8s/deployment.yaml): how long `docker compose stop`/`down` waits
     # after SIGTERM before SIGKILL-ing the container. Without this, Compose's
@@ -111,6 +124,13 @@ services:
       - RATE_LIMIT_BUCKET_CAPACITY
       - RATE_LIMIT_REFILL_PER_SECOND
       - RATE_LIMIT_KEY_TTL_SECONDS
+      # The SSE endpoint (GET /api/v1/reports/{id}/stream) subscribes to
+      # the worker's progress events from this process, so web_app needs the
+      # events Redis too, not just the worker that publishes to it. Without
+      # it the default (localhost) is this container itself and every
+      # stream request fails with a 500.
+      - EVENTS_REDIS_URL=redis://redis:6379/3
+      - SSE_HEARTBEAT_INTERVAL_SECONDS
       # generate_report's retry/backoff/DLQ policy - passed here too
       # because this process imports worker.tasks (to call .delay()),
       # which evaluates these as the task's decorator arguments on import,
@@ -120,6 +140,32 @@ services:
       - TASK_RETRY_BACKOFF_MAX_SECONDS
       - DEAD_LETTER_QUEUE_NAME
       - TASK_FAILURE_INJECTION_COUNT
+
+  # Reverse proxy in front of web_app: the one published entrypoint. Kept on
+  # host port 8080 so the URL documented for this app doesn't change - what
+  # answers on it is now NGINX (container port 80) instead of uvicorn.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: realestateapp_nginx
+    restart: unless-stopped
+    depends_on:
+      web_app:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      # The official image loads every *.conf in /etc/nginx/conf.d/ inside
+      # its http block; mounting over default.conf replaces the stock welcome
+      # server. Read-only: NGINX never needs to write its own config.
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      # busybox wget ships in the alpine image (no curl). Hits NGINX's own
+      # /nginx-health, not the app, so "nginx unhealthy" always means the
+      # proxy itself, never something behind it.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   worker:
     build: .
