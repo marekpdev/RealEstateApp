@@ -1,6 +1,9 @@
 import chainlit as cl
 import sys
-from chainlit.context import ChainlitContextException
+from chainlit.context import ChainlitContextException, local_steps
+from chainlit.utils import utc_now
+
+from events.publisher import publish_log_event_for_current_request
 
 # Safe fallback dictionary to group console outputs beautifully when running via CLI
 _cli_headers = {}
@@ -26,10 +29,27 @@ async def log_agent_header(key: str, text: str):
 
         # Build and send the step drawer if it doesn't exist yet
         if key not in active_steps:
-            node_step = cl.Step(name=text, default_open=True)
+            # Chainlit wraps each incoming message's handler in its own step,
+            # and everything shown for that message belongs under it (that is
+            # what keeps these boxes above the final report). The parent is
+            # looked up here rather than left for Chainlit to infer, since
+            # inference only happens when a step is entered.
+            open_steps = local_steps.get() or []
+            handler_step_id = open_steps[-1].id if open_steps else None
+            node_step = cl.Step(name=text, parent_id=handler_step_id, default_open=True)
 
-            # 🛠️ FORCE CONTEXT ENTRY: Register this step to Chainlit's active task stack
-            await node_step.__aenter__()
+            # Deliberately NOT entered as a context manager. Entering a Step
+            # pushes it onto Chainlit's per-task stack of open steps, and
+            # any step created while another is on that stack becomes its
+            # child. Agents run in parallel, so several are open at once and
+            # each would nest inside whichever opened before it. Sending the
+            # step directly keeps every agent a top-level, independent step
+            # and lets each be closed by its own footer, in any order. Every agent
+            # shares the one handler step above as its parent, so they are
+            # siblings of each other.
+            node_step.start = utc_now()
+            node_step.output = "⏳ Running..."
+            await node_step.send()
 
             active_steps[key] = node_step
             cl.user_session.set("active_agent_steps", active_steps)
@@ -43,14 +63,18 @@ async def log_agent_header(key: str, text: str):
 async def log_agent_content(parent_key: str, text: str):
     if _is_chainlit_active():
         active_steps = cl.user_session.get("active_agent_steps") or {}
+        finished_steps = cl.user_session.get("finished_agent_steps") or {}
+
+        # A line can arrive just after its agent's box was closed (lines are
+        # relayed from another process); it still belongs under that box.
+        parent_step = active_steps.get(parent_key) or finished_steps.get(parent_key)
 
         # Defensive check: if header wasn't initialized first, spawn it safely
-        if parent_key not in active_steps:
+        if parent_step is None:
             fallback_title = f"Node: {parent_key.replace('_', ' ').title()}"
             await log_agent_header(parent_key, fallback_title)
             active_steps = cl.user_session.get("active_agent_steps") or {}
-
-        parent_step = active_steps[parent_key]
+            parent_step = active_steps[parent_key]
         child_step = cl.Step(name=text, parent_id=parent_step.id)
 
         # 🛠️ FORCE CHILD CONTEXT: Explicitly enter and exit the child step
@@ -62,6 +86,13 @@ async def log_agent_content(parent_key: str, text: str):
         header_title = _cli_headers.get(parent_key, parent_key.upper())
         sys.stdout.write(f"  └── [{header_title}]: {text}\n")
         sys.stdout.flush()
+
+        # When this runs inside a graph run in the background worker there is
+        # no chat session to draw into, so also relay the line, over the
+        # job's live channel, to whoever is watching that job. A no-op
+        # anywhere else (the command line, a test calling an agent directly).
+        node_name = str(getattr(parent_key, "value", parent_key))
+        await publish_log_event_for_current_request(node_name, text)
 
 
 async def log_message(text: str):
@@ -92,23 +123,30 @@ async def render_financial_report(text: str):
         sys.stdout.flush()
 
 
-async def log_agent_footer(key: str):
+async def log_agent_footer(key: str, output: str = "✅ Completed"):
     """
-    Marks the agent's Step drawer as completed in Chainlit.
-    This ensures that subsequent messages appear AFTER the step in the UI.
+    Marks the agent's Step drawer as finished in Chainlit, replacing its
+    "Running..." line with `output`. Ending it also stops its loading
+    indicator and lets later messages appear after it.
     """
     if _is_chainlit_active():
         active_steps = cl.user_session.get("active_agent_steps") or {}
         if key in active_steps:
             step = active_steps[key]
 
-            # 🛠️ FORCE CONTEXT EXIT: Pop the step instance out of Chainlit's active run queue.
-            # This handles timestamps, closes WebSocket allocations, and kills the loader UI element.
-            await step.__aexit__(None, None, None)
+            # Closed explicitly (not via __aexit__): the step was never
+            # pushed onto Chainlit's open-step stack, see log_agent_header.
+            step.end = utc_now()
+            step.output = output
+            await step.update()
 
-            # Clean up the session reference
+            # Clean up the active reference, but remember the finished box so
+            # a line that arrives late can still be shown under it.
             del active_steps[key]
             cl.user_session.set("active_agent_steps", active_steps)
+            finished_steps = cl.user_session.get("finished_agent_steps") or {}
+            finished_steps[key] = step
+            cl.user_session.set("finished_agent_steps", finished_steps)
     else:
         # CLI Fallback: Optional separator
         sys.stdout.write(f"🏁 [{key.replace('_', ' ').upper()} COMPLETED]\n")

@@ -439,7 +439,7 @@ async def test_render_node_state_shows_the_error_before_closing_on_failure():
         await app._render_node_state("zoning_law_agent", "failed", "boom")
 
     mock_content.assert_awaited_once_with("zoning_law_agent", "❌ boom")
-    mock_footer.assert_awaited_once_with("zoning_law_agent")
+    mock_footer.assert_awaited_once_with("zoning_law_agent", "❌ Failed")
 
 
 # --- ReportAPIClient: login/refresh/retry mechanics, in isolation ----------
