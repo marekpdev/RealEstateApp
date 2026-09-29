@@ -145,6 +145,8 @@ docker run -p 8080:8080 --env-file .env realestateapp:local
 ```
 *Access the app at `http://localhost:8080/`.*
 
+With Docker Compose, that address is served by an NGINX reverse proxy (`nginx/default.conf`) sitting in front of the `web_app` container, which is no longer published to the host directly. The proxy applies buffering and timeout rules per path - in particular, it streams the `/api/v1/reports/{id}/stream` Server-Sent Events endpoint through unbuffered, so progress events reach the client as they happen instead of all at once when the job ends. `http://localhost:8080/nginx-health` answers from NGINX itself (proxy liveness); `/health` and `/health/ready` are proxied through to the app.
+
 ---
 
 ## 🌐 Production Cloud Deployment & DevOps
