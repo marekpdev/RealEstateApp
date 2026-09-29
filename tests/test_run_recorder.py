@@ -168,12 +168,20 @@ async def test_run_claimed_request_publishes_progress_events_for_every_agent_run
     await pubsub.get_message(timeout=1)  # the "subscribe" confirmation itself
 
     events = []
+    # Human-readable summary lines the agents publish on the same channel
+    # while they work; a different kind of message, tracked separately so
+    # this test's own count of node state changes stays exact.
+    log_events = []
 
     async def _collect() -> None:
         async for message in pubsub.listen():
             if message["type"] != "message":
                 continue
-            events.append(json.loads(message["data"]))
+            payload = json.loads(message["data"])
+            if payload.get("type") == "log":
+                log_events.append(payload)
+                continue
+            events.append(payload)
             if len(events) >= 12:
                 return
 
@@ -213,6 +221,13 @@ async def test_run_claimed_request_publishes_progress_events_for_every_agent_run
     assert completed_seq.keys() == all_nodes
     for node in all_nodes:
         assert running_seq[node] < completed_seq[node]
+
+    # Every agent also relayed at least one summary line, attributed to this
+    # request and to its own node - what the chat UI shows under each box.
+    assert log_events
+    assert all(e["request_id"] == str(claim.request_id) for e in log_events)
+    assert {e["node"] for e in log_events} <= all_nodes
+    assert all(e["message"] for e in log_events)
 
     # The graph's own topology (ingest_input -> supervisor -> fan-out ->
     # financial_modeler) forces these two boundaries regardless of however

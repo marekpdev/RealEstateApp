@@ -1,3 +1,5 @@
+import contextlib
+import contextvars
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -5,9 +7,29 @@ from typing import Optional
 
 from db.enums import JobStatus
 from events.redis_client import get_events_redis_client
-from events.schemas import ProgressEvent
+from events.schemas import LogEvent, ProgressEvent
 
 logger = logging.getLogger(__name__)
+
+# Which request the code running right now is working on behalf of. Set for
+# the duration of a graph run so that code deep inside an agent, which has
+# no request id passed down to it, can still publish a line for the right
+# job. A ContextVar (not a global) so concurrent runs in one process never
+# see each other's value, and asyncio tasks started during a run inherit it.
+_current_request_id: contextvars.ContextVar[Optional[uuid.UUID]] = contextvars.ContextVar(
+    "events_current_request_id", default=None
+)
+
+
+@contextlib.contextmanager
+def request_context(request_id: uuid.UUID):
+    """Marks everything run inside the `with` block as belonging to
+    `request_id` for publish_log_event_for_current_request()."""
+    token = _current_request_id.set(request_id)
+    try:
+        yield
+    finally:
+        _current_request_id.reset(token)
 
 
 def channel_name(request_id: uuid.UUID) -> str:
@@ -67,3 +89,37 @@ async def publish_progress_event(
             "only this ephemeral pub/sub notification was lost",
             request_id, node, status.value, sequence, exc_info=True,
         )
+
+
+async def publish_log_event(*, request_id: uuid.UUID, node: str, message: str) -> None:
+    """PUBLISHes one LogEvent to channel_name(request_id). Never raises, for
+    the same reason publish_progress_event() doesn't: this is an ephemeral
+    nicety on top of state already stored durably, and losing one line must
+    never abort a run."""
+    event = LogEvent(
+        request_id=request_id,
+        node=node,
+        message=message,
+        timestamp=datetime.now(timezone.utc),
+    )
+    try:
+        client = get_events_redis_client()
+        await client.publish(channel_name(request_id), event.model_dump_json())
+    except Exception:
+        logger.warning(
+            "failed to publish log event (request_id=%s node=%s) - only this "
+            "ephemeral line was lost",
+            request_id, node, exc_info=True,
+        )
+
+
+async def publish_log_event_for_current_request(node: str, message: str) -> bool:
+    """Publishes a log line for whichever request the calling code is
+    running on behalf of (see request_context()). Returns False, doing
+    nothing, when there is none - e.g. the command-line entrypoint or a
+    unit test calling an agent directly."""
+    request_id = _current_request_id.get()
+    if request_id is None:
+        return False
+    await publish_log_event(request_id=request_id, node=node, message=message)
+    return True

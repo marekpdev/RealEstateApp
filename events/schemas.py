@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -37,3 +37,20 @@ class ProgressEvent(BaseModel):
     timestamp: datetime
     sequence: int
     error_message: Optional[str] = None
+
+
+class LogEvent(BaseModel):
+    """A short human-readable line describing something one node just did
+    (e.g. "Successfully extracted target market as 'Miami, FL'"), published
+    to the same channel as ProgressEvent so a client can show it under that
+    node. `type` is what tells the two message shapes apart on the wire -
+    ProgressEvent has no such field. Like a progress event it is ephemeral:
+    nothing stores these, so a client that connects after the fact sees the
+    node states (from the database) but not these lines."""
+
+    schema_version: int = PROGRESS_EVENT_SCHEMA_VERSION
+    type: Literal["log"] = "log"
+    request_id: uuid.UUID
+    node: str
+    message: str
+    timestamp: datetime

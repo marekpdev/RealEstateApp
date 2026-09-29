@@ -477,3 +477,40 @@ async def test_stream_stops_and_unsubscribes_when_the_client_disconnects(db_sess
         assert subscriber_count == 0
     finally:
         raw_client.close()
+
+
+@pytest.mark.asyncio
+async def test_stream_forwards_a_log_line_as_its_own_event_without_ending_the_run(db_session):
+    from events.publisher import publish_log_event
+
+    claim = await claim_request(DEMO_USER_ID, _unique_key(), "Invest in Austin, TX up to $900,000")
+    request_id = claim.request_id
+    await InvestmentRequestRepository(db_session).update_status(request_id, JobStatus.RUNNING)
+    await db_session.commit()
+
+    pubsub = await _subscribed(request_id)
+    stream = _stream_progress_events(_FakeRequest(), request_id, pubsub)
+    await stream.__anext__()  # snapshot
+
+    async def _publish_soon():
+        await asyncio.sleep(0.05)
+        await publish_log_event(
+            request_id=request_id, node="market_data_agent", message="🎯 Found 12 listings"
+        )
+
+    publisher = asyncio.create_task(_publish_soon())
+    try:
+        chunk = await asyncio.wait_for(stream.__anext__(), timeout=2)
+    finally:
+        await publisher
+    [(event_name, payload)] = await _parse_sse_events(chunk)
+    assert event_name == "log"
+    assert payload["node"] == "market_data_agent"
+    assert payload["message"] == "🎯 Found 12 listings"
+
+    # The stream is still open afterwards: with nothing else pending it goes
+    # on to send its idle heartbeat instead of treating the line as a
+    # terminal node event (which would have failed validating it as one).
+    with patch("api.v1.reports.config.SSE_HEARTBEAT_INTERVAL_SECONDS", 0.1):
+        assert await asyncio.wait_for(stream.__anext__(), timeout=2) == ": heartbeat\n\n"
+    await stream.aclose()

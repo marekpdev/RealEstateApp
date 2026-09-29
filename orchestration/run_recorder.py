@@ -17,7 +17,7 @@ from db.repositories import (
     hash_request_payload,
 )
 from db.session import session_scope
-from events.publisher import publish_progress_event
+from events.publisher import publish_progress_event, request_context
 from graph import NODE_REGISTRY, compiledStateGraph
 
 
@@ -291,24 +291,27 @@ async def _run_and_record(
     # rather than three independently-numbered ones.
     sequence: Iterator[int] = itertools.count(1)
 
-    try:
-        async for mode, chunk in compiledStateGraph.astream(
-            inputs, config=run_config, stream_mode=["debug", "updates", "values"]
-        ):
-            if mode == "debug":
-                await _handle_debug_chunk(
-                    chunk, request_id, step_started_at, started_nodes, sequence
-                )
-            elif mode == "updates":
-                completed_nodes |= await _handle_updates_chunk(chunk, request_id, sequence)
-            elif mode == "values":
-                final_values = chunk
-                city_budget_persisted = await _maybe_backfill_city_budget(
-                    chunk, request_id, city_budget_persisted
-                )
-    except Exception as exc:
-        await _mark_failed(request_id, started_nodes, completed_nodes, str(exc), sequence)
-        return RunOutcome(request_id=request_id, status=JobStatus.FAILED, report=None, replayed=False)
+    # Lines an agent publishes while the graph runs (see events/) are
+    # attributed to this request through this context.
+    with request_context(request_id):
+        try:
+            async for mode, chunk in compiledStateGraph.astream(
+                inputs, config=run_config, stream_mode=["debug", "updates", "values"]
+            ):
+                if mode == "debug":
+                    await _handle_debug_chunk(
+                        chunk, request_id, step_started_at, started_nodes, sequence
+                    )
+                elif mode == "updates":
+                    completed_nodes |= await _handle_updates_chunk(chunk, request_id, sequence)
+                elif mode == "values":
+                    final_values = chunk
+                    city_budget_persisted = await _maybe_backfill_city_budget(
+                        chunk, request_id, city_budget_persisted
+                    )
+        except Exception as exc:
+            await _mark_failed(request_id, started_nodes, completed_nodes, str(exc), sequence)
+            return RunOutcome(request_id=request_id, status=JobStatus.FAILED, report=None, replayed=False)
 
     status, report = await _persist_success(request_id, final_values or {})
     return RunOutcome(request_id=request_id, status=status, report=report, replayed=False)

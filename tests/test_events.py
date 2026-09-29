@@ -103,3 +103,76 @@ async def test_publish_progress_event_swallows_a_redis_failure_without_raising()
             status=JobStatus.RUNNING,
             sequence=1,
         )  # must not raise
+
+
+# --- log lines: a second kind of message on the same channel ---------------
+
+
+def test_log_event_carries_a_type_that_progress_events_lack():
+    from events.schemas import LogEvent
+
+    log = LogEvent(
+        request_id=uuid.uuid4(),
+        node="zoning_law_agent",
+        message="🎯 Found zoning rules",
+        timestamp=datetime.now(timezone.utc),
+    )
+    assert json.loads(log.model_dump_json())["type"] == "log"
+
+    progress = ProgressEvent(
+        request_id=uuid.uuid4(),
+        node="zoning_law_agent",
+        status=JobStatus.RUNNING,
+        timestamp=datetime.now(timezone.utc),
+        sequence=1,
+    )
+    assert "type" not in json.loads(progress.model_dump_json())
+
+
+@pytest.mark.asyncio
+async def test_publish_log_event_for_current_request_uses_the_context_request_id():
+    from events.publisher import publish_log_event_for_current_request, request_context
+
+    request_id = uuid.uuid4()
+    client = redis.Redis.from_url(config.EVENTS_REDIS_URL, decode_responses=True)
+    pubsub = client.pubsub()
+    try:
+        pubsub.subscribe(channel_name(request_id))
+        pubsub.get_message(timeout=1.0)
+
+        with request_context(request_id):
+            assert await publish_log_event_for_current_request("market_data_agent", "🔍 Looking") is True
+        await dispose_events_redis_client()
+
+        message = None
+        for _ in range(20):
+            message = pubsub.get_message(timeout=0.5, ignore_subscribe_messages=True)
+            if message:
+                break
+        payload = json.loads(message["data"])
+        assert payload["type"] == "log"
+        assert payload["node"] == "market_data_agent"
+        assert payload["message"] == "🔍 Looking"
+        assert payload["request_id"] == str(request_id)
+    finally:
+        pubsub.close()
+        client.close()
+
+
+@pytest.mark.asyncio
+async def test_publish_log_event_for_current_request_is_a_noop_outside_a_run():
+    from events.publisher import publish_log_event_for_current_request
+
+    with patch("events.publisher.get_events_redis_client") as get_client:
+        assert await publish_log_event_for_current_request("market_data_agent", "x") is False
+    get_client.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_publish_log_event_swallows_a_redis_failure():
+    from events.publisher import publish_log_event
+
+    broken = AsyncMock()
+    broken.publish.side_effect = redis.ConnectionError("down")
+    with patch("events.publisher.get_events_redis_client", return_value=broken):
+        await publish_log_event(request_id=uuid.uuid4(), node="n", message="m")

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from typing import AsyncIterator, Optional, Tuple
 
@@ -207,6 +208,19 @@ async def list_reports(
     )
 
 
+def _forward_event_name(data: str) -> str:
+    """Which SSE event type one message off the job's Redis channel goes out
+    as: `log` for a short human-readable line (events.LogEvent), `progress`
+    for a node state change. The two share a channel and differ only in
+    their `type` field, which progress events do not carry."""
+    try:
+        if json.loads(data).get("type") == "log":
+            return "log"
+    except (ValueError, AttributeError):
+        pass
+    return "progress"
+
+
 def _sse(event: str, data: str) -> str:
     """One Server-Sent Event: an `event:` line naming the type (so a client
     can `addEventListener(event, ...)` per-type instead of every consumer
@@ -333,7 +347,12 @@ async def _stream_progress_events(
                 continue
 
             data: str = message["data"]
-            yield _sse("progress", data)
+            event_name = _forward_event_name(data)
+            yield _sse(event_name, data)
+            if event_name == "log":
+                # A log line is never a node state change, so it can never
+                # be what ends the run.
+                continue
 
             event = ProgressEvent.model_validate_json(data)
             if event.status in _TERMINAL_STATUSES:
@@ -372,7 +391,7 @@ async def _stream_progress_events(
                         )
                         if buffered is None:
                             break
-                        yield _sse("progress", buffered["data"])
+                        yield _sse(_forward_event_name(buffered["data"]), buffered["data"])
                     yield _sse(
                         "status",
                         ReportStreamStatus(

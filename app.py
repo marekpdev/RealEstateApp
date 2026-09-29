@@ -133,6 +133,9 @@ async def _await_report(client, request_id: str) -> None:
             await _render_node_state(
                 payload["node"], payload["status"], payload.get("error_message")
             )
+        elif event_name == "log":
+            payload = json.loads(data)
+            await log_agent_content(payload["node"], payload["message"])
         elif event_name == "status":
             return
 
@@ -152,5 +155,7 @@ async def _render_node_state(node: str, node_status: str, error_message: Optiona
     await log_agent_header(node, title)
     if node_status == JobStatus.FAILED.value and error_message:
         await log_agent_content(node, f"❌ {error_message}")
-    if node_status in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
+    if node_status == JobStatus.FAILED.value:
+        await log_agent_footer(node, "❌ Failed")
+    elif node_status == JobStatus.COMPLETED.value:
         await log_agent_footer(node)
