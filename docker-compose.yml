@@ -125,7 +125,7 @@ services:
     build: .
     image: realestateapp:local
     container_name: realestateapp_worker
-    command: ["uv", "run", "celery", "-A", "worker.celery_app", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "worker.celery_app", "worker", "--loglevel=info"]
     # How long `docker compose stop`/`down` waits after SIGTERM before
     # SIGKILL-ing this container - Compose's equivalent of Kubernetes'
     # terminationGracePeriodSeconds. Celery's own warm shutdown (see
@@ -205,7 +205,7 @@ services:
     # (the overlapping-run lock in worker.sync_knowledge_base guards against
     # concurrent *task* execution, not against a second *scheduler*
     # duplicating deliveries in the first place).
-    command: ["uv", "run", "celery", "-A", "worker.celery_app", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "worker.celery_app", "beat", "--loglevel=info"]
     depends_on:
       redis:
         condition: service_healthy

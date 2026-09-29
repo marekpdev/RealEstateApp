@@ -53,3 +53,8 @@ Dockerfile
 # Ignore the entire infrastructure directory during container builds
 terraform/
 k8s/
+# Test modules are not part of the runtime image. tests/fixtures/ is kept on
+# purpose: the app's mock/offline mode loads its canned agent outputs and
+# vendor payloads from there at runtime.
+tests/test_*.py
+tests/conftest.py
