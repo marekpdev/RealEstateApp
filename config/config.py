@@ -336,6 +336,19 @@ HYBRID_RETRIEVAL_CANDIDATES_PER_SOURCE = int(os.getenv("HYBRID_RETRIEVAL_CANDIDA
 # existing dense-only search_zoning_laws's own k=3.
 HYBRID_RETRIEVAL_RESULTS = int(os.getenv("HYBRID_RETRIEVAL_RESULTS", "3"))
 
+# --- Retrieval evaluation harness -------------------------------------------
+# scripts/evaluate_retrieval.py scores dense/lexical/hybrid retrieval against
+# a small hand-labelled query set (retrieval/eval_dataset.py) with
+# recall@k/MRR/nDCG@k (retrieval/evaluation.py). RETRIEVAL_EVAL_K matches
+# HYBRID_RETRIEVAL_RESULTS's own default so the harness scores retrieval at
+# the same cutoff the live Zoning Law agent actually consumes.
+RETRIEVAL_EVAL_K = int(os.getenv("RETRIEVAL_EVAL_K", "3"))
+# Candidates requested per method before scoring - deliberately larger than
+# RETRIEVAL_EVAL_K for the same reason HYBRID_RETRIEVAL_CANDIDATES_PER_SOURCE
+# is: recall@k/nDCG@k need a real ranking to score against, not just each
+# method's single best guess.
+RETRIEVAL_EVAL_CANDIDATES_PER_SOURCE = int(os.getenv("RETRIEVAL_EVAL_CANDIDATES_PER_SOURCE", "10"))
+
 DEBUG_MODE = get_env_bool("DEBUG_MODE")
 
 if DEBUG_MODE:
