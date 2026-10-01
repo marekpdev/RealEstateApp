@@ -30,7 +30,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 # Stage 2 - runtime: the same slim base (so the venv's interpreter symlink
 # resolves identically) plus the finished venv and the application code.
-# No uv, no dev dependencies (pytest, pytest-asyncio, respx), no build caches.
+# No dev dependencies (pytest, pytest-asyncio, respx) and no build caches; the only
+# build-tool binaries kept are uv/uvx, which the agents need at run time (see below).
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -52,6 +53,14 @@ RUN chown app:app /app
 # The venv stays root-owned: the running process can read and execute it but
 # can't modify installed packages.
 COPY --from=builder /app/.venv /app/.venv
+
+# uv and uvx are needed at run time, not just build time: the agents launch their
+# MCP tool servers (Brave Search, Fetch, OpenStreetMap, Wikipedia) with `uvx`,
+# which runs each server in its own isolated environment (one of them needs a
+# newer Python than the app's own, so they cannot live in the app venv). Without
+# them the tool gateway finds no tools and the agents silently run without any.
+# The binaries are standalone; uvx's cache lives under the app user's home (/app).
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 
 # Application code changes most often, so it comes last. It is owned by the
 # app user because Chainlit writes its own runtime files (.files/, chainlit

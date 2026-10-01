@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" width="1200" height="770" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="System architecture: clients reach FastAPI through NGINX; FastAPI records jobs in PostgreSQL and enqueues work in Redis; a Celery worker running the LangGraph agents consumes tasks, writes audit rows and publishes progress events that stream back to the client over Server-Sent Events.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker></defs>
+<rect x="14" y="16" width="1172" height="200" rx="20" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+<rect x="14" y="236" width="1172" height="150" rx="20" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+<rect x="14" y="406" width="1172" height="348" rx="20" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+<text x="1172" y="52" font-size="13" font-weight="700" fill="#8b949e" text-anchor="end" letter-spacing="2">REQUEST PATH</text>
+<text x="1172" y="72" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >fast · stateless</text>
+<text x="1172" y="92" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >never runs an agent</text>
+<text x="1172" y="272" font-size="13" font-weight="700" fill="#8b949e" text-anchor="end" letter-spacing="2">SHARED STATE</text>
+<text x="1172" y="292" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >the only thing API</text>
+<text x="1172" y="311" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >and worker share</text>
+<text x="44" y="440" font-size="13" font-weight="700" fill="#8b949e" text-anchor="start" letter-spacing="2">WORK PATH</text>
+<text x="150" y="440" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >slow · expensive · retryable</text>
+<rect x="44" y="74" width="200" height="108" rx="14" fill="#0f2a4d" stroke="#58a6ff" stroke-width="2"/>
+<text x="144.0" y="112.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Clients</text>
+<text x="144.0" y="134.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >Chainlit chat UI</text>
+<text x="144.0" y="153.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >curl · services</text>
+<rect x="300" y="74" width="190" height="108" rx="14" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="395.0" y="112.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >NGINX</text>
+<text x="395.0" y="134.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >reverse proxy</text>
+<text x="395.0" y="153.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >SSE unbuffered</text>
+<rect x="546" y="60" width="470" height="136" rx="14" fill="#12361f" stroke="#3fb950" stroke-width="2"/>
+<text x="781.0" y="103.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >FastAPI  ·  /api/v1</text>
+<text x="781.0" y="125.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >JWT / API key · CORS · rate limit</text>
+<text x="781.0" y="144.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >Idempotency-Key  ·  SSE stream</text>
+<text x="781.0" y="163.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >OpenAPI / Swagger</text>
+<path d="M244 128 L296 128" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M490 128 L542 128" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M780 60 C780 26 144 26 144 70" fill="none" stroke="#8b949e" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#a)"/>
+<rect x="374.2" y="19" width="175.6" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="462" y="34" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >SSE: live agent steps</text>
+<rect x="250" y="268" width="330" height="92" rx="14" fill="#3a2b0b" stroke="#d29922" stroke-width="2"/>
+<text x="415.0" y="298.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >PostgreSQL</text>
+<text x="415.0" y="320.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >durable truth: jobs · reports</text>
+<text x="415.0" y="339.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >agent audit trail · full-text index</text>
+<rect x="640" y="268" width="330" height="92" rx="14" fill="#3a2b0b" stroke="#d29922" stroke-width="2"/>
+<text x="805.0" y="298.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Redis</text>
+<text x="805.0" y="320.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >ephemeral coordination</text>
+<text x="805.0" y="339.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >queue · pub/sub · cache · rate limits</text>
+<path d="M600 196 C600 232 470 232 470 264" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="449.8" y="211" width="84.39999999999999" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="492" y="226" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >claim job</text>
+<path d="M800 196 L800 264" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="765.4" y="217" width="69.19999999999999" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="800" y="232" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >enqueue</text>
+<path d="M930 196 L930 264" fill="none" stroke="#8b949e" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#a)"/>
+<rect x="887.8" y="217" width="84.39999999999999" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="930" y="232" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >subscribe</text>
+<rect x="40" y="456" width="760" height="270" rx="16" fill="#2a2050" fill-opacity="0.35" stroke="#a371f7" stroke-width="2"/>
+<text x="60" y="484" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="start" >Celery worker  ·  LangGraph multi-agent graph</text>
+<text x="60" y="504" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >typed Pydantic state between every node</text>
+<rect x="62" y="566" width="112" height="62" rx="12" fill="#0f2a4d" stroke="#58a6ff" stroke-width="2"/>
+<text x="118.0" y="590.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Ingest</text>
+<text x="118.0" y="612.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >LLM → typed</text>
+<rect x="206" y="566" width="122" height="62" rx="12" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="267.0" y="590.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Supervisor</text>
+<text x="267.0" y="612.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >no LLM call</text>
+<rect x="372" y="518" width="190" height="50" rx="12" fill="#0f2a4d" stroke="#58a6ff" stroke-width="2"/>
+<text x="467.0" y="549.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Market Data</text>
+<rect x="372" y="578" width="190" height="50" rx="12" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="467.0" y="609.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Neighborhood Vibe</text>
+<rect x="372" y="638" width="190" height="50" rx="12" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="467.0" y="669.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Zoning Law · RAG</text>
+<rect x="606" y="566" width="172" height="62" rx="12" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="692.0" y="590.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Financial Modeler</text>
+<text x="692.0" y="612.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >Python REPL tool</text>
+<path d="M174 597 L202 597" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M328 597 C350 597 350 543 368 543" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M328 597 L368 603" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M328 597 C350 597 350 663 368 663" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M562 543 C586 543 584 577 602 577" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M562 603 C584 603 584 597 602 597" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M562 663 C586 663 584 617 602 617" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<text x="467" y="706" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >three researchers run in parallel</text>
+<rect x="62" y="646" width="240" height="60" rx="12" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="182.0" y="669.0" font-size="15" font-weight="700" fill="#e6edf3" text-anchor="middle" >Celery Beat</text>
+<text x="182.0" y="691.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >scheduled RAG sync</text>
+<rect x="850" y="470" width="300" height="240" rx="14" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="1000.0" y="538.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >External services</text>
+<text x="1000.0" y="560.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >OpenAI  ·  Pinecone</text>
+<text x="1000.0" y="579.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >MCP tool servers</text>
+<text x="1000.0" y="598.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >(Brave · Fetch · OSM · Wikipedia)</text>
+<text x="1000.0" y="617.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >RapidAPI  ·  Azure Blob</text>
+<text x="1000.0" y="636.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" ></text>
+<text x="1000.0" y="655.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >retry · circuit breaker · cache-aside</text>
+<path d="M778 597 L846 597" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M415 360 L415 452" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="331.0" y="397" width="168" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="415" y="412" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >status + audit rows</text>
+<path d="M760 360 L760 452" fill="none" stroke="#8b949e" stroke-width="2.2" marker-start="url(#a)" marker-end="url(#a)"/>
+<rect x="635.0" y="397" width="250" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="760" y="412" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >consume tasks · publish progress</text>
+</svg>

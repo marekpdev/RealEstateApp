@@ -221,10 +221,11 @@ async def poll_until_terminal(
     """Watches the investment_requests row for request_id until the Celery
     worker running the graph (worker/tasks.py's generate_report) writes a
     terminal status, or `timeout` elapses. Postgres is the only channel the
-    two processes share right now - this is a stand-in for the real push
-    mechanism a later phase adds (SSE over Redis pub/sub); until then, the
-    only way the caller can know the work finished is to keep asking the
-    durable record both processes already agree on. This is what "eventual
+    two processes share for a caller that does not stream: this is the
+    polling path cli.py uses (the API's live counterpart is the SSE endpoint
+    over Redis pub/sub), where the only way to know the work finished is to
+    keep asking the durable record both processes already agree on. This is
+    what "eventual
     consistency" concretely means here: the row is not COMPLETED the
     instant the task is enqueued, only eventually, and this function is the
     one place that gap is bridged.

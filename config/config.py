@@ -10,6 +10,12 @@ BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 GH_TOKEN = os.getenv("GH_TOKEN")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "real-estate-app")
+# The embedding model is pinned explicitly, not left to the library default: a
+# dependency upgrade must never silently change the model underneath an existing
+# index, because vectors from different models are not comparable and search
+# would quietly degrade. The default is the model the index was built with;
+# changing it means re-embedding the whole index (into a new one, then switch).
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
 
 # Deliberately POSTGRES_DSN, never DATABASE_URL: chainlit/data/__init__.py activates
 # Chainlit's own persistence layer the moment DATABASE_URL is set in the environment,

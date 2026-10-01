@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Circuit breaker states: Closed lets calls through and counts failures; five failures in a row open it; Open fails every call instantly with no network call; after 30 seconds it goes half-open and allows one probe call, which closes it if it succeeds and re-opens it, restarting the timer, if it fails.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#475569"/></marker></defs>
+<circle cx="50" cy="96" r="9" fill="#475569"/>
+<path d="M60 104 L100 138" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="40" y="140" width="240" height="104" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="160.0" y="176.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >Closed</text>
+<text x="160.0" y="198.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >calls flow through</text>
+<text x="160.0" y="217.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >failures are counted</text>
+<rect x="720" y="140" width="240" height="104" rx="14" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="840.0" y="176.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >Open</text>
+<text x="840.0" y="198.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >fail fast: no network call</text>
+<text x="840.0" y="217.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >503 in microseconds</text>
+<rect x="380" y="300" width="240" height="96" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="500.0" y="332.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >Half-open</text>
+<text x="500.0" y="354.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >exactly one probe call</text>
+<text x="500.0" y="373.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >is let through</text>
+<path d="M160 138 C160 44 840 44 840 136" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="420.0" y="59" width="160" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="500" y="74" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >5 failures in a row</text>
+<path d="M800 246 C800 320 720 340 624 348" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="697.0" y="311" width="90" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="742" y="326" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >after 30 s</text>
+<path d="M596 298 C600 250 650 222 716 218" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<text x="640" y="276" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="start" >probe fails:</text>
+<text x="640" y="294" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="start" >timer restarts</text>
+<path d="M376 348 C250 350 160 320 160 248" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="193.0" y="321" width="130" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="258" y="336" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >probe succeeds</text>
+</svg>

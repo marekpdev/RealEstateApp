@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Hybrid retrieval: a zoning question runs in parallel against dense Pinecone search and lexical PostgreSQL full-text search; Reciprocal Rank Fusion merges the two ranked lists and the top three chunks go to the agent.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker></defs>
+<rect x="375" y="24" width="350" height="56" rx="28" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="550.0" y="58.0" font-size="16" font-weight="700" fill="#e6edf3" text-anchor="middle" >Zoning question from the agent</text>
+<path d="M480 80 C480 116.0 280 116.0 280 152" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<path d="M620 80 C620 116.0 820 116.0 820 152" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="500.2" y="107" width="99.6" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="550" y="122" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >in parallel</text>
+<rect x="90" y="154" width="380" height="110" rx="14" fill="#0f2a4d" stroke="#58a6ff" stroke-width="2"/>
+<text x="280.0" y="193.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Dense · Pinecone</text>
+<text x="280.0" y="215.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >embeddings match meaning</text>
+<text x="280.0" y="234.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >finds paraphrases</text>
+<rect x="630" y="154" width="380" height="110" rx="14" fill="#12361f" stroke="#3fb950" stroke-width="2"/>
+<text x="820.0" y="193.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Lexical · Postgres full-text</text>
+<text x="820.0" y="215.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >tsvector + GIN · ts_rank_cd</text>
+<text x="820.0" y="234.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >finds exact terms: ordinance numbers</text>
+<path d="M280 264 C280 307.0 470 307.0 470 350" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="290.2" y="301" width="99.6" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="340" y="316" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >ranked list</text>
+<path d="M820 264 C820 307.0 630 307.0 630 350" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="710.2" y="301" width="99.6" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="760" y="316" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >ranked list</text>
+<rect x="300" y="352" width="500" height="116" rx="14" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="550.0" y="394.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Reciprocal Rank Fusion</text>
+<text x="550.0" y="416.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >score(d) = Σ 1 / (k + rank),   k = 60</text>
+<text x="550.0" y="435.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >ranks, not scores: no normalising needed</text>
+<path d="M550 468 L550 508" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="300" y="510" width="500" height="104" rx="14" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="550.0" y="546.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Top 3 chunks go to the agent</text>
+<text x="550.0" y="568.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >with source, rrf_score and each list's rank</text>
+<text x="550.0" y="587.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >if one side is down, the other still answers</text>
+<text x="30" y="376" font-size="13" font-weight="700" fill="#8b949e" text-anchor="start" letter-spacing="2">WHY BOTH HALVES</text>
+<text x="30" y="402" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >Dense matches meaning but can</text>
+<text x="30" y="422" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >miss a rare exact token. Lexical</text>
+<text x="30" y="442" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >nails exact terms but misses</text>
+<text x="30" y="462" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >paraphrases.</text>
+<text x="830" y="376" font-size="13" font-weight="700" fill="#8b949e" text-anchor="start" letter-spacing="2">WHY RANK FUSION</text>
+<text x="830" y="402" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >The two score scales are not</text>
+<text x="830" y="422" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >comparable, so RRF adds up</text>
+<text x="830" y="442" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >ranks instead of scores.</text>
+</svg>

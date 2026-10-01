@@ -310,7 +310,7 @@ async def test_execute_and_record_resumes_a_stranded_pending_row(db_session, off
 async def test_run_claimed_request_short_circuits_a_redelivered_completed_task(
     db_session, offline_graph
 ):
-    """The scenario this phase exists for: worker/tasks.py's generate_report
+    """The scenario this guard exists for: worker/tasks.py's generate_report
     calls run_claimed_request() directly (not execute_and_record(), and not
     through claim_request()'s own COMPLETED short-circuit), so a Celery
     redelivery of the exact same task message - an ack lost after a
@@ -470,8 +470,9 @@ async def test_poll_until_terminal_waits_through_non_terminal_polls(db_session):
 @pytest.mark.asyncio
 async def test_poll_until_terminal_gives_up_after_timeout_without_raising(db_session):
     """A row stuck RUNNING forever (e.g. its worker crashed without ever
-    updating the row - not this phase's concern to prevent, see Phase 2.3's
-    retries/DLQ) must not hang the caller forever: poll_until_terminal
+    updating the row - not this function's concern to prevent; see the
+    hard-killed-worker limitation in docs/ARCHITECTURE.md) must not hang
+    the caller forever: poll_until_terminal
     gives up at `timeout` and returns the last-seen non-terminal status,
     not an exception and not a false COMPLETED/FAILED."""
     key = _unique_key()

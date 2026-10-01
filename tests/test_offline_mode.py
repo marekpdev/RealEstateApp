@@ -73,9 +73,12 @@ async def test_guarded_client_passes_through_when_online():
     """The same transport must behave like a normal client once OFFLINE_MODE is off."""
     _, async_client = guarded_httpx_clients("test-caller")
     try:
-        async with respx.mock:
-            respx.get("https://example.test/ping").respond(json={"ok": True})
-            response = await async_client.get("https://example.test/ping")
+        # Patched explicitly rather than relying on the ambient environment:
+        # a developer's .env (copied from .env.example) turns OFFLINE_MODE on.
+        with patch("config.config.OFFLINE_MODE", False):
+            async with respx.mock:
+                respx.get("https://example.test/ping").respond(json={"ok": True})
+                response = await async_client.get("https://example.test/ping")
         assert response.json() == {"ok": True}
     finally:
         await async_client.aclose()

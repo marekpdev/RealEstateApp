@@ -164,7 +164,7 @@ def test_generate_report_round_trips_through_real_redis(celery_worker_process):
 
 
 def test_generate_report_disposes_the_db_engine_after_each_run():
-    """Regression test for a real bug this phase found only via a manual,
+    """Regression test for a real bug that only showed up in a manual,
     two-tasks-through-one-real-worker-process check (not reproducible
     inside pytest-asyncio's own already-running loop): Celery's solo pool
     reuses one process across many tasks, each wrapped in its own
@@ -251,9 +251,9 @@ def test_generate_report_increments_attempt_count_on_every_physical_attempt():
 
 def test_generate_report_injected_failure_short_circuits_before_run_claimed_request():
     """config.TASK_FAILURE_INJECTION_COUNT is read fresh on every call (not
-    bound as a decorator/parameter default - the same import-time-freezing
-    trap the roadmap already documents elsewhere would otherwise silently
-    ignore this patch), so setting it to 1 here makes a direct call (whose
+    bound as a decorator/parameter default - the import-time-freezing trap
+    would otherwise silently ignore this patch), so setting it to 1 here
+    makes a direct call (whose
     self.request.retries defaults to 0, an attempt that hasn't been
     retried yet - 0 < 1) raise before run_claimed_request is ever awaited."""
     request_id = asyncio.run(_create_real_request_row())
@@ -351,7 +351,7 @@ def offline_graph():
 
 
 def test_generate_report_redelivery_short_circuits_without_rerunning_graph(offline_graph):
-    """The end-to-end proof of this phase's guarantee, through the real
+    """The end-to-end proof of the redelivery guarantee, through the real
     task entrypoint rather than a mocked-out run_claimed_request(): two
     physical generate_report() calls for the same request_id - standing in
     for a Celery redelivery of the identical task message, e.g. an ack lost
@@ -408,8 +408,8 @@ def test_generate_report_redelivery_short_circuits_without_rerunning_graph(offli
 # covered piecewise by the tests above (retries genuinely recover, and
 # on_failure() genuinely marks FAILED and routes to the DLQ once Celery
 # decides an attempt is final) plus a one-time manual verification against
-# a real, standalone `celery worker` process - see this phase's learning
-# document for the transcript.
+# a real, standalone `celery worker` process - see the fault-injection
+# walkthrough in docs/GETTING_STARTED.md for the transcript.
 
 
 def test_beat_schedule_registers_sync_knowledge_base():

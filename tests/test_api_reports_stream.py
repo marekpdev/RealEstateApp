@@ -151,8 +151,8 @@ async def test_stream_owned_by_a_different_user_returns_404(db_session, client):
 async def test_stream_of_a_completed_job_replays_snapshot_then_closes(
     db_session, offline_graph, client
 ):
-    """'connecting after the job finished still yields a sane terminal
-    response' - the phase's own verification bullet. Runs the job to
+    """Connecting after the job finished still yields a sane terminal
+    response. Runs the job to
     completion first (sequentially, via claim_request + run_claimed_request,
     exactly like tests/test_run_recorder.py's own pattern), then connects to
     the stream - never concurrently, so this never risks the SAVEPOINT
