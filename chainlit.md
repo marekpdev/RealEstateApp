@@ -1,17 +1,17 @@
 # 🏢 Real Estate AI Investment Planner
 
-Welcome! This system is an advanced multi-agent orchestrator built with **LangGraph** and powered by structured LLM parsing. It is designed to evaluate real estate deals by combining disparate data layers in parallel.
+Welcome! This system is a multi-agent orchestrator built with **LangGraph**. It evaluates a real estate deal by researching three angles in parallel and merging them into one investment report.
 
 ### 🧠 How It Works Under the Hood
-When you request a market deal calculation, the system initializes a state graph that handles the following execution path:
+Each request runs as a background job on a worker, and every step streams back here live:
 
-1. **Ingest Gateway**: Extracts parameters (location, budget bounds) into rigorous Pydantic schemas.
-2. **Supervisor Router**: Spawns multiple parallel workers simultaneously.
-3. **Data Analysis Workers (Parallel Execution)**:
-   - **Market Data Agent**: Queries active MLS listings and calculates baseline cap rates.
-   - **Neighborhood Vibe Agent**: Conducts semantic searches across vector databases for community logs and sentiment.
-   - **Zoning Law Agent**: Parses municipal codes, density boundaries, and short-term rental (STR) constraints.
-4. **Financial Modeler**: Synthesizes all worker buckets to generate a final markdown prospectus investment report.
+1. **Ingest Gateway**: An LLM extracts your parameters (location, budget bounds) into a validated Pydantic schema.
+2. **Supervisor**: A plain fan-out (no LLM involved) that starts the three researchers at the same time.
+3. **Researchers (run in parallel)**:
+   - **Market Data Agent**: Pulls live listings from a real-estate API, computes aggregate statistics in code, then asks an LLM to classify the market.
+   - **Neighborhood Vibe Agent**: Uses tools discovered at runtime over **MCP** (Wikipedia and OpenStreetMap) to describe the area.
+   - **Zoning Law Agent**: Retrieves zoning rules with **RAG** over a Pinecone index (optionally hybrid with Postgres full-text search) and falls back to web search when the knowledge base is thin.
+4. **Financial Modeler**: Merges the three results, computes the deal metrics with a Python REPL tool, and writes the final markdown report.
 
 ### 🚀 Try It Out
 Type an investment scenario into the chat bar below to watch the underlying LangGraph nodes activate in real time.

@@ -2,6 +2,8 @@
 
 This guide provides the complete operational runbook required to provision infrastructure, toggle runtime environments, establish connections, configure security states, monitor runtimes, and execute cost-saving lifecycle management tasks for the Real Estate AI Investment Planner.
 
+For what is deployed today and what a production high-availability setup would add, see [Cloud and Kubernetes](ARCHITECTURE.md#cloud-and-kubernetes) in the architecture guide. Commands below assume the repository root as the working directory unless a step says otherwise.
+
 ## 🛠️ System Prerequisites
 Before initializing the workspace rollout, ensure your host computer has the following administration command-line interfaces installed locally:
 *   **Azure CLI (`az`)**
@@ -145,19 +147,3 @@ cd terraform
 # Destroy all provisioned remote resources cleanly in one unified configuration wipe
 terraform destroy
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

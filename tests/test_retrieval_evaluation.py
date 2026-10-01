@@ -133,7 +133,7 @@ async def test_run_evaluation_lexical_only_finds_nothing_for_a_paraphrased_query
 
 @pytest.mark.asyncio
 async def test_run_evaluation_hybrid_recovers_what_lexical_alone_misses(db_session):
-    """The property this whole phase is meant to demonstrate, using the
+    """The property this harness exists to demonstrate, using the
     hand-authored demo dense stand-in (see retrieval/eval_dataset.py) in
     place of real Pinecone: hybrid's aggregate recall@k across the
     paraphrased queries must exceed lexical-only's, because RRF's fused
@@ -157,3 +157,45 @@ async def test_run_evaluation_hybrid_recovers_what_lexical_alone_misses(db_sessi
 
     assert lexical_recall == 0.0
     assert hybrid_recall > lexical_recall
+
+
+@pytest.mark.asyncio
+async def test_documented_demo_results_match_what_the_harness_produces(db_session):
+    """docs/AGENTIC_AI.md shows the `--demo-dense` results as a table, and
+    docs/images/generate.py draws its nDCG@3 chart from the same numbers.
+    Pinning them here means the documentation cannot silently go stale when
+    the eval set, the fusion code or a metric changes: this test fails, and
+    the table and the chart get regenerated together."""
+    await DocumentChunkRepository(db_session).replace_all(EVAL_CORPUS)
+    await db_session.commit()
+
+    per_method = await run_evaluation(
+        db_session,
+        vectorstore=_DemoVectorStore(),
+        dense_skip_reason=None,
+        k=3,
+        candidates_per_source=10,
+        rrf_k=60,
+    )
+
+    everything = list(range(len(EVAL_QUERIES)))
+    exact_term = [i for i, q in enumerate(EVAL_QUERIES) if q.favors_lexical]
+    paraphrased = [i for i, q in enumerate(EVAL_QUERIES) if not q.favors_lexical]
+    hybrid = "hybrid (dense+lexical, RRF)"
+
+    # (recall@3, MRR, nDCG@3), as printed by the run.
+    documented = {
+        ("lexical-only", "overall"): (0.438, 0.500, 0.452),
+        (hybrid, "overall"): (1.000, 1.000, 1.000),
+        ("dense-only", "overall"): (1.000, 0.875, 0.908),
+        ("lexical-only", "exact-term"): (0.875, 1.000, 0.903),
+        (hybrid, "exact-term"): (1.000, 1.000, 1.000),
+        ("dense-only", "exact-term"): (1.000, 0.750, 0.815),
+        ("lexical-only", "paraphrased"): (0.000, 0.000, 0.000),
+        (hybrid, "paraphrased"): (1.000, 1.000, 1.000),
+        ("dense-only", "paraphrased"): (1.000, 1.000, 1.000),
+    }
+    groups = {"overall": everything, "exact-term": exact_term, "paraphrased": paraphrased}
+    for (method, group), expected in documented.items():
+        got = aggregate([per_method[method][i] for i in groups[group]])
+        assert (got.recall_at_k, got.mrr, got.ndcg_at_k) == pytest.approx(expected, abs=0.001), (method, group)

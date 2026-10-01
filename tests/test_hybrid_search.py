@@ -41,7 +41,7 @@ def test_reciprocal_rank_fusion_with_one_empty_list_degrades_to_the_other_lists_
 
 def test_reciprocal_rank_fusion_smaller_k_rewards_top_rank_more_steeply():
     # A smaller k widens the score gap between rank 1 and rank 2 - the
-    # "how much k matters" question the roadmap's own doc-focus calls out.
+    # "how much does k matter" question in one assertion.
     fused_small_k = dict(reciprocal_rank_fusion([["a", "b"]], k=1))
     fused_large_k = dict(reciprocal_rank_fusion([["a", "b"]], k=1000))
     gap_small_k = fused_small_k["a"] - fused_small_k["b"]
@@ -65,8 +65,8 @@ async def test_hybrid_search_fuses_dense_and_lexical_so_the_top_result_is_not_ei
     # ("lexical_only_top") each appear in only one list. "shared_chunk"
     # appears in both, at a decent (not top) rank in each - RRF should
     # still surface it above either side's individual favorite, which is
-    # exactly the property the roadmap's own Verify step names: "hybrid
-    # returns results neither method alone ranked first."
+    # exactly the property hybrid retrieval exists for: it returns results
+    # neither method alone ranked first.
     shared_content = "Ordinance 12-345 establishes multi-family setback requirements for R-3 zones."
     await DocumentChunkRepository(db_session).replace_all(
         [

@@ -23,7 +23,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except ValueError:
-        # Malformed/foreign hash format (e.g. a hand-written placeholder
-        # like the pre-Phase-3.3 seed migration's "!unusable-seeded-by-
-        # migration") - never a match, not a server error.
+        # Malformed/foreign hash format (e.g. the hand-written placeholder
+        # "!unusable-seeded-by-migration" that an earlier seed migration
+        # stored instead of a real hash) - never a match, not a server error.
         return False

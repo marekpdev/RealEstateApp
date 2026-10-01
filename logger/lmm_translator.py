@@ -44,7 +44,7 @@ def _compile_ui_log_offline(log_type: LogType, context_name: str) -> str:
     """
     Deterministic stand-in for the LLM-written UI string. Keeps the same shape
     (starts with an emoji, one short line) so the UI is unaffected, without spending
-    a real request per log line (see §6.8 in the learning roadmap).
+    a real model request per log line.
     """
     emoji = _OFFLINE_EMOJI.get(log_type, "⚙️")
     clean_context = context_name.replace("_", " ").title()

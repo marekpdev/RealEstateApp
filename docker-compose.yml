@@ -1,3 +1,10 @@
+# The application services (migrate, web_app, worker, beat) run the code baked into
+# the image; the checkout is deliberately NOT bind-mounted over /app. The image runs
+# as a non-root user (UID 10001) that owns /app, and a bind mount would replace that
+# directory with the host's files - typically owned by someone else - so Chainlit
+# could not create /app/.files at import time and every service would exit with a
+# PermissionError on a fresh Linux checkout. After changing code, rebuild with
+# `docker compose up --build`.
 services:
   postgres:
     image: postgres:16
@@ -68,9 +75,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - .:/app
-      - /app/.venv
     env_file:
       - .env
     environment:
@@ -114,9 +118,6 @@ services:
     # teardown, not to a task duration - the API process itself never runs
     # the graph (the worker does); it only ever waits on one.
     stop_grace_period: 330s
-    volumes:
-      - .:/app
-      - /app/.venv
     env_file:
       - .env
     environment:
@@ -138,9 +139,9 @@ services:
       - DB_MAX_OVERFLOW
       - DB_ECHO
       - DB_PERSISTENCE_ENABLED
-      # app.py now enqueues generate_report onto the worker (Phase 2.2)
-      # instead of running the graph inline, so this container needs to
-      # reach Redis as a broker client too, not just the worker service.
+      # The API (POST /api/v1/reports) enqueues generate_report onto the
+      # worker instead of running the graph inline, so this container needs
+      # to reach Redis as a broker client too, not just the worker service.
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -208,7 +209,7 @@ services:
     # indefinitely for the in-flight generate_report task on a single
     # SIGTERM, so without a grace period long enough to cover that,
     # Compose's 10s default would SIGKILL the worker mid-task - the exact
-    # "job stuck in RUNNING forever" failure mode this phase exists to
+    # "job stuck in RUNNING forever" failure mode this setting exists to
     # avoid. There's no separate task_time_limit configured for
     # generate_report, so REPORT_POLL_TIMEOUT_SECONDS (the app's own
     # existing definition of "how long a job is allowed to take", used by
@@ -222,9 +223,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    volumes:
-      - .:/app
-      - /app/.venv
     env_file:
       - .env
     environment:
@@ -272,9 +270,9 @@ services:
     build: .
     image: realestateapp:local
     container_name: realestateapp_beat
-    # A separate process from `worker` on purpose (see the phase's learning
-    # document for the full reasoning): Beat only reads worker/celery_app.py's
-    # beat_schedule and, on interval, calls apply_async() by task name - it
+    # A separate process from `worker` on purpose: Beat only reads
+    # worker/celery_app.py's beat_schedule and, on interval, calls
+    # apply_async() by task name - it
     # never imports worker.tasks or executes a task body itself, so it needs
     # none of the Postgres/vendor credentials the worker service below does.
     # Exactly one replica, always - two Beat processes would each
@@ -286,9 +284,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
-      - /app/.venv
     env_file:
       - .env
     environment:

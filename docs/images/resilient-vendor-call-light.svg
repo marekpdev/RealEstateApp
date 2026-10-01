@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 760" width="1100" height="760" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Every paid vendor call passes four layers in order: a Redis cache-aside, a single-flight lock, a per-vendor circuit breaker and a jittered retry loop. A cache hit costs nothing, an open breaker fails without a network call, and a bad request fails at once without counting against the breaker.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#475569"/></marker></defs>
+<rect x="40" y="24" width="430" height="48" rx="24" fill="#e5e7eb" stroke="#6b7280" stroke-width="2"/>
+<text x="255.0" y="54.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Agent asks for market data</text>
+<path d="M255 72 L255 110" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="40" y="112" width="430" height="74" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="255.0" y="142.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >1 · Cache-aside</text>
+<text x="255.0" y="164.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >Redis · hashed query key · 15 min TTL</text>
+<path d="M255 186 L255 238" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="231.8" y="201" width="46.4" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="255" y="216" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >miss</text>
+<rect x="40" y="240" width="430" height="90" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="255.0" y="269.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >2 · Single-flight lock</text>
+<text x="255.0" y="291.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >SET NX EX: N concurrent misses make 1 call</text>
+<text x="255.0" y="310.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >the others wait for the cache to fill</text>
+<path d="M255 330 L255 376" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="40" y="378" width="430" height="74" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="255.0" y="408.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >3 · Circuit breaker (one per vendor)</text>
+<text x="255.0" y="430.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >5 failures in a row open it · a probe after 30 s</text>
+<path d="M255 452 L255 498" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="178.60000000000002" y="465" width="152.79999999999998" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="255" y="480" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >closed, or a probe</text>
+<rect x="40" y="500" width="430" height="90" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="255.0" y="529.0" font-size="17" font-weight="700" fill="#111827" text-anchor="middle" >4 · Retry loop</text>
+<text x="255.0" y="551.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >only timeouts · 429 · 5xx</text>
+<text x="255.0" y="570.0" font-size="14" font-weight="400" fill="#4b5563" text-anchor="middle" >full-jitter backoff · max 4 attempts · 20 s budget</text>
+<path d="M255 590 L255 634" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="40" y="636" width="430" height="52" rx="26" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+<text x="255.0" y="668.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Vendor (RapidAPI)</text>
+<path d="M470 149 L646 149" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="538.6" y="128" width="38.8" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="558" y="143" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >hit</text>
+<rect x="650" y="122" width="420" height="54" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="860.0" y="155.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Answered: no vendor call, no cost</text>
+<path d="M470 415 L646 415" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="504.4" y="394" width="107.19999999999999" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="558" y="409" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >breaker open</text>
+<rect x="650" y="388" width="420" height="54" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="860.0" y="421.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Fails in microseconds: no network call</text>
+<path d="M470 545 L646 545" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="489.2" y="524" width="137.6" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="558" y="539" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >budget exhausted</text>
+<rect x="650" y="518" width="420" height="54" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="860.0" y="551.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Breaker failure recorded, then 503 or 429</text>
+<path d="M470 654 C558.0 654 558.0 630 646 630" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="538.6" y="621" width="38.8" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="558" y="636" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >200</text>
+<rect x="650" y="604" width="420" height="50" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="860.0" y="635.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Cached, lock released</text>
+<path d="M470 672 C558.0 672 558.0 704 646 704" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="515.8" y="683" width="84.39999999999999" height="22" rx="6" fill="#ffffff" opacity="0.92"/>
+<text x="558" y="698" font-size="13.5" font-weight="600" fill="#4b5563" text-anchor="middle" >other 4xx</text>
+<rect x="650" y="676" width="420" height="56" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="860.0" y="710.0" font-size="15" font-weight="700" fill="#111827" text-anchor="middle" >Fails at once: caller's fault, breaker unaffected</text>
+</svg>

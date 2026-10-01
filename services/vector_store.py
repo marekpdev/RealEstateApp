@@ -1,6 +1,6 @@
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
-from config.config import PINECONE_API_KEY, PINECONE_INDEX_NAME, OPENAI_API_KEY
+from config.config import EMBEDDING_MODEL, PINECONE_API_KEY, PINECONE_INDEX_NAME, OPENAI_API_KEY
 from config.safety import guarded_httpx_clients
 
 # Shared by every caller of a Pinecone-backed vectorstore built here
@@ -19,6 +19,7 @@ def get_pinecone_vector_store():
 
     http_client, http_async_client = guarded_httpx_clients("services.vector_store.OpenAIEmbeddings")
     embeddings = OpenAIEmbeddings(
+        model=EMBEDDING_MODEL,
         api_key=OPENAI_API_KEY,
         http_client=http_client,
         http_async_client=http_async_client,

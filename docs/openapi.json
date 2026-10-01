@@ -1,0 +1,784 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Real Estate Agentic System API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Infrastructure Monitoring"
+        ],
+        "summary": "Health Check",
+        "description": "Liveness probe: is the process up and able to serve requests at all?",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Infrastructure Monitoring"
+        ],
+        "summary": "Readiness Check",
+        "description": "Readiness probe: can this instance actually do its job right now? Unlike\n/health, this checks the database on every call - a process can be alive\n(liveness) while unable to serve traffic that needs the database (readiness).",
+        "operationId": "readiness_check_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange email/password for an access + refresh token pair",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Incorrect email or password"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange a still-valid refresh token for a new access token",
+        "description": "Issues a new access token without re-prompting for a password, as\nlong as the refresh token itself is still valid. Deliberately does not\nrotate the refresh token (return a new one and invalidate the old): this\napp's tokens are stateless (nothing server-side tracks which ones have\nbeen issued, see auth/tokens.py), so there is nothing to actually mark\nthe old refresh token invalid with - handing back a \"new\" one while the\nold one keeps working too would just be theater. Real rotation-with-\nrevocation needs a server-side record per refresh token (e.g. a Redis\nentry keyed by a jti claim, checked and burned on every use) - deliberately\nout of scope: a stolen refresh token remains valid until its own expiry,\nwhich is why it's short-lived relative to a session and why the access\ntoken it mints is itself short-lived too.",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh token missing, expired, or invalid"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Submit an investment analysis request",
+        "description": "Enqueues a new report-generation job. Requires an `Idempotency-Key` header, scoped per user: reusing a key with the *same* request body is a safe replay - no new work is done, and the response is `200` with the original job's current status. Reusing a key with a *different* request body is rejected with `409`, since the key no longer unambiguously identifies one request. A key not seen before always creates a new job and returns `202` with its job id and a status URL to poll.",
+        "operationId": "create_report_api_v1_reports_post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "A client-generated key unique to this logical request. Reuse it unchanged to safely retry the same request; a fresh UUID per genuinely new request is the usual choice.",
+              "title": "Idempotency-Key"
+            },
+            "description": "A client-generated key unique to this logical request. Reuse it unchanged to safely retry the same request; a fresh UUID per genuinely new request is the usual choice."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportAccepted"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Replay: this Idempotency-Key was already used with the same request body. No new job was created or enqueued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportAccepted"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key already used with a different request body"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "List report requests, newest first",
+        "operationId": "list_reports_api_v1_reports_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Max rows to return.",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Max rows to return."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Rows to skip, for paging.",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Rows to skip, for paging."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{request_id}": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Fetch one report request's current status, and its content once complete",
+        "operationId": "get_report_api_v1_reports__request_id__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No report request with this id exists"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/{request_id}/stream": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Stream one report request's progress live, over Server-Sent Events",
+        "description": "`text/event-stream`: an `event: snapshot` carrying every node's currently known state, then zero or more `event: progress` messages as the worker actually runs each node, then exactly one `event: status` with the job's final outcome, after which the stream ends. A connection with nothing to report for a while receives a bare `: heartbeat` comment line instead, to keep an idle proxy from timing it out.",
+        "operationId": "stream_report_progress_api_v1_reports__request_id__stream_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "No report request with this id exists"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessTokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "AccessTokenResponse",
+        "description": "Response for POST /api/v1/auth/refresh - deliberately narrower than\nTokenPair: this endpoint mints a new access token from a still-valid\nrefresh token but does not rotate the refresh token itself (see\napi/v1/auth.py's refresh() docstring for why), so there is nothing new\nto hand back on that front."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "description": "The closed set of states a unit of tracked work (an investment request, or\none agent's run within it) can be in. Backed by a native Postgres ENUM, not\nVARCHAR, because this domain is fixed by the application's own state\nmachine, not by something external that changes shape (contrast\nconfig.constants.NodeName, which stays VARCHAR because graph topology\nchanges are exactly the kind of change an ENUM makes expensive)."
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "description": "Body for POST /api/v1/auth/login. There is no self-registration\nendpoint (see db/models.py's User docstring), so `email` must already\nbelong to a migration-seeded row."
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "description": "Body for POST /api/v1/auth/refresh."
+      },
+      "ReportAccepted": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "status_url": {
+            "type": "string",
+            "title": "Status Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "status_url"
+        ],
+        "title": "ReportAccepted",
+        "description": "Response for POST /api/v1/reports - `202` for a brand-new job\n(`status` is PENDING, since it's just been claimed and enqueued, not\nrun) or `200` for a replay of an existing one (`status` reflects that\njob's actual current state, whatever it is). Either way, callers poll\n`status_url` (GET .../{id}) for progress, exactly as\npoll_until_terminal() already does internally for app.py/cli.py."
+      },
+      "ReportContent": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "total_listings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Listings"
+          },
+          "average_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Price"
+          },
+          "median_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Price"
+          },
+          "highest_listing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highest Listing"
+          },
+          "lowest_listing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Listing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "ReportContent",
+        "description": "The finished deliverable, nested inside ReportDetail once a job\nreaches COMPLETED. Numeric aggregates stay Decimal, matching\ndb/models.py's Report.average_price etc. (Numeric(14, 2), never float,\nfor money - see db/models.py's own comment on why)."
+      },
+      "ReportCreateRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "description": "A natural-language investment request for ingest_input_agent to parse.",
+            "examples": [
+              "Invest in Austin, TX with a budget of up to $750,000"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "ReportCreateRequest",
+        "description": "Body for POST /api/v1/reports. `query` is the same free-text\ninvestment prompt app.py/cli.py already pass straight to the graph as a\nHumanMessage (e.g. ingest_input_agent expects to extract a city and a\nbudget out of it) - the API does not parse or validate its contents\nbeyond non-emptiness, exactly like the existing entrypoints."
+      },
+      "ReportDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "budget": {
+            "type": "string",
+            "title": "Budget"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "city",
+          "budget",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReportDetail",
+        "description": "200 response for GET /api/v1/reports/{id}. `report` is None until\n`status` reaches COMPLETED - there is nothing to nest before then."
+      },
+      "ReportListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReportSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ReportListResponse",
+        "description": "`total` is the full matching count regardless of `limit`/`offset`, so\na client can compute how many pages remain without a second request."
+      },
+      "ReportSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "budget": {
+            "type": "string",
+            "title": "Budget"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "city",
+          "budget",
+          "created_at"
+        ],
+        "title": "ReportSummary",
+        "description": "One row of GET /api/v1/reports's paginated listing - deliberately\nthinner than ReportDetail (no nested report content) since a listing is\nfor scanning many jobs at once, not reading one closely."
+      },
+      "TokenPair": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenPair",
+        "description": "Response for POST /api/v1/auth/login. `token_type` is always\n\"bearer\" - what a client puts in the Authorization header\n(`Authorization: Bearer <access_token>`) on every subsequent call to a\nprotected route. `refresh_token` is only ever sent back here and to\n/auth/refresh, never required on a report route."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

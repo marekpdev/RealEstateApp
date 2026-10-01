@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Grouped bar chart of nDCG at 3 by query type for three retrieval methods, from an illustrative run on eight hand-labelled queries with a stand-in dense arm. Exact-term queries: lexical-only 0.903, dense-only 0.815, hybrid 1.000. Paraphrased queries: lexical-only 0.000, dense-only 1.000, hybrid 1.000. Each single method has a blind spot; the fused hybrid covers both.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker></defs>
+<text x="40" y="40" font-size="19" font-weight="700" fill="#e6edf3" text-anchor="start" >nDCG@3 by query type</text>
+<text x="40" y="63" font-size="13.5" font-weight="400" fill="#9aa7b5" text-anchor="start" >Illustrative: 8 hand-labelled queries. The dense arm is a hand-authored stand-in, not Pinecone.</text>
+<rect x="40" y="86" width="14" height="14" rx="3" fill="#199e70"/>
+<text x="62" y="98" font-size="13.5" font-weight="400" fill="#9aa7b5" text-anchor="start" >lexical-only: Postgres full-text</text>
+<rect x="312" y="86" width="14" height="14" rx="3" fill="#3987e5"/>
+<text x="334" y="98" font-size="13.5" font-weight="400" fill="#9aa7b5" text-anchor="start" >dense-only: embeddings (stand-in)</text>
+<rect x="591" y="86" width="14" height="14" rx="3" fill="#d95926"/>
+<text x="613" y="98" font-size="13.5" font-weight="400" fill="#9aa7b5" text-anchor="start" >hybrid (RRF): both, fused</text>
+<line x1="300" y1="128" x2="300" y2="424" stroke="#8b949e" stroke-width="1"/>
+<text x="300" y="446" font-size="12.5" font-weight="400" fill="#9aa7b5" text-anchor="middle" >0</text>
+<line x1="440.0" y1="128" x2="440.0" y2="424" stroke="#30363d" stroke-width="1"/>
+<text x="440.0" y="446" font-size="12.5" font-weight="400" fill="#9aa7b5" text-anchor="middle" >0.25</text>
+<line x1="580.0" y1="128" x2="580.0" y2="424" stroke="#30363d" stroke-width="1"/>
+<text x="580.0" y="446" font-size="12.5" font-weight="400" fill="#9aa7b5" text-anchor="middle" >0.5</text>
+<line x1="720.0" y1="128" x2="720.0" y2="424" stroke="#30363d" stroke-width="1"/>
+<text x="720.0" y="446" font-size="12.5" font-weight="400" fill="#9aa7b5" text-anchor="middle" >0.75</text>
+<line x1="860.0" y1="128" x2="860.0" y2="424" stroke="#30363d" stroke-width="1"/>
+<text x="860.0" y="446" font-size="12.5" font-weight="400" fill="#9aa7b5" text-anchor="middle" >1</text>
+<text x="40" y="156" font-size="15" font-weight="700" fill="#e6edf3" text-anchor="start" >Exact-term queries</text>
+<text x="286" y="185" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >lexical-only</text>
+<path d="M300 168 H801.6800000000001 A4 4 0 0 1 805.6800000000001 172 V188 A4 4 0 0 1 801.6800000000001 192 H300 Z" fill="#199e70"/>
+<text x="815.6800000000001" y="185" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >0.903</text>
+<text x="286" y="221" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >dense-only</text>
+<path d="M300 204 H752.4 A4 4 0 0 1 756.4 208 V224 A4 4 0 0 1 752.4 228 H300 Z" fill="#3987e5"/>
+<text x="766.4" y="221" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >0.815</text>
+<text x="286" y="257" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >hybrid (RRF)</text>
+<path d="M300 240 H856.0 A4 4 0 0 1 860.0 244 V260 A4 4 0 0 1 856.0 264 H300 Z" fill="#d95926"/>
+<text x="870.0" y="257" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >1.000</text>
+<text x="40" y="304" font-size="15" font-weight="700" fill="#e6edf3" text-anchor="start" >Paraphrased queries</text>
+<text x="286" y="333" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >lexical-only</text>
+<text x="310.0" y="333" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >0.000</text>
+<text x="362.0" y="333" font-size="13.5" font-weight="400" fill="#9aa7b5" text-anchor="start" >finds nothing when the words differ</text>
+<text x="286" y="369" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >dense-only</text>
+<path d="M300 352 H856.0 A4 4 0 0 1 860.0 356 V372 A4 4 0 0 1 856.0 376 H300 Z" fill="#3987e5"/>
+<text x="870.0" y="369" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >1.000</text>
+<text x="286" y="405" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="end" >hybrid (RRF)</text>
+<path d="M300 388 H856.0 A4 4 0 0 1 860.0 392 V408 A4 4 0 0 1 856.0 412 H300 Z" fill="#d95926"/>
+<text x="870.0" y="405" font-size="14" font-weight="600" fill="#e6edf3" text-anchor="start" >1.000</text>
+</svg>

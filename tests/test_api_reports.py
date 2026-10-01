@@ -191,8 +191,8 @@ async def test_full_round_trip_create_then_fetch_completed_report(
 ):
     """A curl-style round trip: POST creates a job, and once the (inlined,
     in these tests) worker finishes it, GET returns the full report -
-    covering the same ground this phase's own manual verification did
-    against a real uvicorn + Celery worker process."""
+    covering the same ground as a manual run against a real uvicorn +
+    Celery worker process."""
     with _inline_generate_report() as pending_run:
         async with respx.mock:
             create_response = await client.post(

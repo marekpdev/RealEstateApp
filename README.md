@@ -1,195 +1,214 @@
-# Real Estate AI Investment Planner
+<div align="center">
 
-The **Real Estate AI Investment Planner** is a Python-based multi-agent platform that automates complex real estate analysis, transforming raw market variables into comprehensive, investor-grade underwriting reports.
+# 🏢 Real Estate AI Investment Planner
 
-### ⚡ Tech Stack At-a-Glance
+### A multi-agent AI system, engineered like a production service
 
-| Layer                   | Technologies Used                                                    | Purpose / Role                                                                        |
-|:------------------------|:---------------------------------------------------------------------|:--------------------------------------------------------------------------------------|
-| **Multi-Agent AI**      | **LangGraph**, **LangChain**, **OpenAI LLMs**                        | Manages parallel researcher nodes, state state-machines, and core reasoning.          |
-| **API & Protocols**     | **FastAPI**, **Model Context Protocol (MCP)**                        | Exposes application endpoints and handles dynamic tool discovery adapters.            |
-| **Data & RAG Pipeline** | **Pinecone**, **Azure Blob Storage**                                 | Hybrid vector/cloud knowledge base for municipal documents and zoning codes.          |
-| **Infrastructure**      | **Docker**, **Terraform (IaC)**, **AKS (Kubernetes)**                | Handles multi-environment reproducibility, containerization, and cloud orchestration. |
-| **CI/CD**               | **GHCR**                                                             | Automated version-controlled container hosting.                                       |
-| **UX/UI**               | **Chainlit**                                                         | Interactive Chainlit UI featuring real-time, streamed agent reasoning updates.        |
+Turn a plain-English investment goal into an investor-grade property report. Specialist agents built with **LangGraph** research the market, the neighborhood and the zoning rules **in parallel**, using live tools from **MCP servers** and a **hybrid RAG** knowledge base. A **FastAPI · PostgreSQL · Redis · Celery** backend keeps it **resilient, cost-efficient and secure**, and **Docker, Terraform and Kubernetes (AKS)** take it to the cloud.
 
-**Live Demo:** [https://realestateapp.marekpdev.com/](https://realestateapp.marekpdev.com/)
+[![CI](https://github.com/marekpdev/RealEstateApp/actions/workflows/deploy.yml/badge.svg)](https://github.com/marekpdev/RealEstateApp/actions/workflows/deploy.yml)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-multi--agent-1C3C3C?logo=langchain&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?logo=celery&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-844FBA?logo=terraform&logoColor=white)
+![Azure AKS](https://img.shields.io/badge/Azure_AKS-0078D4?logo=microsoftazure&logoColor=white)
+
+**[🌐&nbsp;Live demo](https://realestateapp.marekpdev.com/)** &nbsp;·&nbsp; **[🎬&nbsp;Video](#demo)** &nbsp;·&nbsp; **[🧰&nbsp;Tech stack](#tech-stack)** &nbsp;·&nbsp; **[✨&nbsp;Features](#features)** &nbsp;·&nbsp; **[💰&nbsp;Cost optimization](#cost-optimization)** &nbsp;·&nbsp; **[🚀&nbsp;Run it](#quickstart)** &nbsp;·&nbsp; **[📚&nbsp;Docs](#documentation)** &nbsp;·&nbsp; **[💼&nbsp;LinkedIn](https://www.linkedin.com/in/marekpszczolka94/)**
+
+</div>
+
+---
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img src="docs/images/architecture-light.svg" alt="System architecture: clients reach FastAPI through NGINX; FastAPI records jobs in PostgreSQL and enqueues work in Redis; a Celery worker running the LangGraph agent graph consumes tasks, writes an audit trail and publishes progress that streams back to the client over Server-Sent Events." width="100%">
+</picture>
+<sub>The full architecture, request lifecycle and failure behaviour: <a href="docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a></sub>
+</div>
+
+<br>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/highlights-dark.svg">
+    <img src="docs/images/highlights-light.svg" alt="Six highlights of the project: 3 agents research in parallel; 4 MCP tool servers give live web, map and Wikipedia data; 2 search methods, meaning and keywords, are combined; 240 plus automated tests run on a real database and message queue; 34 documented design decisions; and $0 to run the whole pipeline offline." width="100%">
+  </picture>
+</p>
+
+> **Type a plain-English investment goal** (*"I'd like to invest in Austin, TX with a $900k budget"*) and a team of specialised agents goes to work. Three research at the same time (one prices the market from live listings, one profiles the neighborhood, one digs through municipal zoning law), then an underwriting agent computes cap rate and cash-on-cash return and writes an investor-grade report. **You watch every agent work, live.**
+
+<a id="tech-stack"></a>
+
+## 🧰 Tech stack
+
+| 🤖 **AI & agents** | 🏗️ **Backend & data** | ☁️ **Cloud & DevOps** |
+|:--|:--|:--|
+| ✅ LangGraph | ✅ Python 3.12 | ✅ Docker (multi-stage) |
+| ✅ LangChain | ✅ FastAPI | ✅ Docker Compose |
+| ✅ OpenAI API | ✅ REST + OpenAPI / Swagger | ✅ NGINX |
+| ✅ Model Context Protocol (MCP) | ✅ Server-Sent Events | ✅ GitHub Actions CI/CD |
+| ✅ RAG pipeline | ✅ Celery + Celery Beat | ✅ GitHub Container Registry |
+| ✅ Pinecone vector database | ✅ PostgreSQL 16 | ✅ Terraform (infrastructure as code) |
+| ✅ Hybrid search (Reciprocal Rank Fusion) | ✅ SQLAlchemy 2.0 (async) | ✅ Kubernetes |
+| ✅ Structured output (Pydantic) | ✅ Alembic migrations | ✅ Azure Kubernetes Service (AKS) |
+| ✅ Retrieval evaluation (recall, MRR, nDCG) | ✅ Redis 7 | ✅ Azure Blob Storage |
+
+| 🛡️ **Reliability** | 🔐 **Security** | 🧪 **Quality** |
+|:--|:--|:--|
+| ✅ Retries with jitter | ✅ JWT and API keys | ✅ pytest on real Postgres and Redis |
+| ✅ Circuit breakers | ✅ Rate limiting (token bucket) | ✅ Concurrency (race-condition) tests |
+| ✅ Idempotency keys | ✅ CORS allow-list | ✅ Migration drift test |
+| ✅ Dead-letter queue | ✅ bcrypt password hashing | ✅ Offline mode: no paid calls in tests |
+| ✅ Caching with stampede protection | ✅ Non-root containers | ✅ A mock twin for every agent |
+| ✅ Graceful shutdown | ✅ Secrets kept out of the code | ✅ CI on every push |
+
+<a id="demo"></a>
+
+## 🎬 See it in action
 
 <video src="https://github.com/user-attachments/assets/e4cf66d4-9918-41ad-977a-a42407e43d1b" controls width="100%">
   Your browser does not support the video tag.
 </video>
 
----
+<a id="features"></a>
 
-## 🚀 Key Features & Tech Stack
+## ✨ Key features
 
-### 🧠 Advanced Multi-Agent Orchestration
-*   **Parallel Graph Execution:** High-concurrency architecture where researcher nodes (Market, Vibe, and Zoning) execute in parallel using **LangGraph**'s state-machine orchestration, significantly reducing total analysis time.
-*   **Stateful Workflow Management:** Uses **Pydantic models** to manage the state and pass structured context between agents, ensuring data consistency across the graph.
-*   **MCP Integration & Dynamic Tooling:** Employs the **UnifiedMCPGateway** to dynamically discover and load tools from **MCP Servers** (Brave Search, Fetch, OpenStreetMap, Wikipedia) via standardized adapters. Adding new capabilities is as simple as updating the `MCP_SERVER_REGISTRY`.
+Every feature below is built, tested against real infrastructure and documented together with the reasoning behind it. Plain language first, technical terms in brackets.
 
-### 🛡️ Enterprise Cloud Architecture & DevOps (IaC)
-*   **Infrastructure as Code (IaC):** 100% reproducible, declarative system architecture defined using **Terraform** to provision remote cloud infrastructure configurations dynamically.
-*   **Kubernetes Orchestration (AKS):** High-availability scaling and state management using **Azure Kubernetes Service**, routing incoming user traffic dynamically via cloud LoadBalancers using declarative manifest files.
-*   **Secure Infrastructure Governance:** Adheres to enterprise security standards by enforcing a "Hybrid DevOps Setup"—utilizing strict git-tracking protocols for provider lock files while securely shielding state files and unencrypted access records.
-*   **Decoupled Secret Pipeline:** Runtime API variables are injected via secure native Kubernetes generic secrets, keeping production credentials safely separated from repository tracking ledgers.
+### 🤖 The AI
 
-### 📚 RAG Pipeline (Retrieval-Augmented Generation)
-*   **Hybrid Knowledge Base:** Combines live web search with a specialized **Pinecone** vector database containing verified municipal documents.
-*   **Cloud-Native Storage:** Documents are stored in **Azure Blob Storage** and synchronized to Pinecone via a custom ETL pipeline.
-*   **Automated Document Processing:** End-to-end RAG lifecycle including PDF parsing (**pypdf**), semantic chunking (**RecursiveCharacterTextSplitter**), and high-performance embedding generation (**OpenAI text-embedding-3-small**).
-*   **Expert Prompting:** The Zoning Law agent leverages optimized system instructions to prioritize RAG records over web fallbacks, maintaining a strict "search budget" for performance.
+- **Faster research, in parallel.** Three specialist agents investigate the market, the neighborhood and the zoning rules at the same time, then a fourth combines their findings into one report (LangGraph, parallel fan-out and fan-in).
+- **Reliable hand-offs.** Each agent passes its findings to the next in a strict, validated format, which keeps the whole pipeline predictable from start to finish (Pydantic).
+- **Real-world data through MCP.** Agents look things up on the live web, maps and Wikipedia using the Model Context Protocol (MCP), the open standard for plugging tools into AI. Adding another source is a single configuration entry, and one central gateway keeps tool answers short so runs stay fast and affordable.
+- **Answers grounded in real documents.** The zoning agent answers from a library of municipal documents using two search methods that work well together: one understands meaning, the other matches exact terms such as ordinance numbers (hybrid RAG: Pinecone vector search and PostgreSQL full-text search, merged with Reciprocal Rank Fusion; enabled with one setting).
+- **Search quality you can prove.** A built-in test bench scores how well each search method finds the right passage (recall, MRR, nDCG). It showed that keyword search alone misses answers worded differently from the document, which is why the two methods are combined.
+- **Accurate numbers.** The AI writes the report, but the maths (statistics, cap rate, returns) is done by code rather than guessed by the model, which also saves cost (deterministic tools).
+- **Keeps going when a tool is down.** If a data source or the document library is unavailable, the agent is told in plain words and takes another route, such as web search, so the report still gets finished (graceful degradation).
 
-### 💎 Premium User Experience (Chainlit)
-*   **Real-time UX Translation:** Employs a specialized `@llm_translator` agent that intercepts raw technical logs and JSON payloads, converting them into concise, emoji-enhanced progress updates for the end-user.
-*   **Interactive Interface:** Custom-styled **Chainlit** dashboard with dedicated CSS and theme configurations for a professional investor experience.
-*   **Action Tracking:** Every tool usage and node action is streamed directly to the main UI chat window, providing a transparent "audit trail" of the AI's reasoning process.
+### 🛡️ Dependable in production
 
-### 🛡️ Robust Engineering
-*   **Type-Safe Contracts:** Utilizes **Pydantic** for structured output and state management, separated into per-agent models in `state.py` for maximum clarity and maintainability.
-*   **Reliability Guardrails:** Implements a strict `recursion_limit` for graph execution to prevent infinite agentic loops and ensure system stability.
-*   **Token Optimization:** Custom logic in `tools.py` sanitizes tool schemas and injects restrictive defaults to minimize token consumption and API costs.
-*   **Deterministic Underwriting:** The Financial Modeler agent uses a sandboxed **Python REPL** to calculate Cap Rates, NOI, and Cash-on-Cash returns with 100% mathematical precision.
+- **Fast responses, heavy work in the background.** The API replies immediately while background workers do the slow AI work, and failed steps are retried automatically with nothing silently lost (FastAPI, Celery, retries with backoff, dead-letter queue).
+- **No duplicate work, no double billing.** If a request is sent twice, or a message is delivered twice, the job still runs, and is paid for, only once (idempotency keys and atomic claims: "exactly-once effect").
+- **Copes with unreliable third parties.** When an outside service is slow or down, the system backs off, stops calling a service that keeps failing, and reuses recent answers (jittered retries, circuit breakers, caching).
+- **Live progress.** Users watch each agent work as it happens, and someone who joins late still sees the whole run (Server-Sent Events).
+- **Secure by default.** Logins and API keys, request limits per user, strict rules on which websites may call the API, containers that run without admin rights, and no secrets stored in the code (JWT, API keys, rate limiting, CORS allow-list, non-root containers).
+- **Data you can trust.** Everything is stored in one reliable database with a full audit trail of what each agent did, and database changes are versioned and checked automatically (PostgreSQL, Alembic migrations, drift test).
+- **Proven by tests.** 240+ automated tests run against a real database and message queue, including tests that deliberately race two workers against each other, and they run on every code change (pytest, CI).
 
----
+### ☁️ Cloud and delivery
 
-## 🤖 Agent Architecture & Roles
+- **Runs the same everywhere.** The app is packaged in containers that run without admin rights, and starts locally with a single command (Docker, Docker Compose, NGINX).
+- **Automatic quality gate.** Every code change is tested against real services, then built and published automatically (GitHub Actions, GitHub Container Registry).
+- **Cloud set-up as code.** The Azure cluster is created from version-controlled scripts, so it can be rebuilt or removed with a command (Terraform, Azure Kubernetes Service; see [Cloud and Kubernetes](#cloud)).
 
-The complete graph topology and node definitions are maintained in `graph.py`.
+<a id="cost-optimization"></a>
 
-1.  **Ingest Agent:** Uses Pydantic for schema-strict extraction of user criteria (City, Budget, Strategy) from natural language.
-2.  **Supervisor Agent:** Implements router logic to orchestrate the research phase and fan-out tasks to worker nodes.
-3.  **Market Data Agent:** Retrieves live listings and pricing telemetry via asynchronous **RapidAPI** calls.
-4.  **Neighborhood Vibe Agent:** Analyzes community sentiment and connectivity using **OpenStreetMap** and **Wikipedia** via MCP.
-5.  **Zoning Law Agent:** Executes a RAG workflow to query **Pinecone** for land-use restrictions and STR regulations.
-6.  **Financial Modeler Agent:** A high-fidelity "Synthesizer" that executes code-based modeling via **Python REPL** to generate the final prospectus.
+## 💰 Cost optimization
 
----
+AI bills grow through long prompts, repeated calls and runaway loops. Each source of waste is handled separately:
 
-## 🛠️ Local Installation & Setup
+| 💸 Business benefit | 🔧 How it is achieved |
+|:--|:--|
+| 🪙 **Lower cost per report** | Every model call uses a small, inexpensive model, and steps that need no AI (routing, statistics, arithmetic) are plain code |
+| ✂️ **No surprise bills from long prompts** | Tool output is capped (page fetches default to 2,000 characters, web search to 3 results), agents have explicit search budgets, and retrieval passes on only the top 3 passages |
+| 🧠 **Repeat questions cost nothing** | Market data is cached for 15 minutes, and simultaneous identical lookups collapse into one paid call |
+| 🌀 **No runaway spending when something goes wrong** | Retries have an attempt and a time budget, a circuit breaker stops calling a failing vendor, and every agent loop has a step limit |
+| 🧾 **One request, one bill** | A repeated request returns the existing job, and a redelivered message cannot run the paid agents a second time |
+| 🧪 **Free development and testing** | An offline mode blocks every paid call at the network layer, so the whole pipeline and test suite run at zero cost |
+| ☁️ **A small cloud bill** | One small cluster node that can be stopped between demos, and capped cache memory |
 
-### Prerequisites
-*   Python 3.12+ (managed via **uv**)
-*   Docker & Docker Compose
+**Next savings**, each with the reason it is not built yet: matching each task to a right-sized model, reusing whole reports for identical requests, skipping unchanged documents when the knowledge base refreshes, and tracking tokens and cost per run so every saving can be measured. → [docs/COST_OPTIMIZATION.md](docs/COST_OPTIMIZATION.md)
 
-### Configuration
-Create a `.env` file in the root directory with the following variables:
+<a id="cloud"></a>
 
-```env
-# Core API Keys
-OPENAI_API_KEY=your_key
-RAPIDAPI_KEY=your_key
-BRAVE_API_KEY=your_key
-GH_TOKEN=your_github_token
-PINECONE_API_KEY=your_key
-PINECONE_INDEX_NAME=real-estate-app
+## ☁️ Cloud and Kubernetes (AKS)
 
-# Azure RAG Configuration
-AZURE_STORAGE_CONNECTION_STRING=your_connection_string
+The app is designed to run on **Kubernetes**, the standard system for running applications in the cloud: it starts them, restarts them if they fail, and adds capacity when demand grows. The repository includes the code to set this up on **Azure Kubernetes Service (AKS)**. The demo cluster is deliberately one small server to keep the bill low. Here is what exists, and what a production setup that must never go down would add:
 
-# Testing & Mocking (Toggles)
-MOCK_FINANCIAL_MODELER_AGENT_OUTPUT=False
-MOCK_INGEST_INPUT_AGENT_OUTPUT=False
-MOCK_MARKET_DATA_AGENT_OUTPUT=False
-MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT=False
-MOCK_ZONING_LAW_AGENT_OUTPUT=False
-MOCK_MARKET_DATA_API=False
+| | ✅ In this repository | 🔜 For production high availability |
+|:--|:--|:--|
+| 🖥️ **Servers** | An Azure Kubernetes cluster created from code, kept to one small server to save money (Terraform, AKS) | Three or more servers spread across separate data-centre zones, growing and shrinking with demand (availability zones, autoscaler) |
+| 📦 **The app** | Resource limits, secrets kept outside the code, time to finish running jobs before a restart, and health-check endpoints (`/health`, `/health/ready`) | Several copies behind the load balancer, automatic scaling, the health checks wired in, and dedicated background-worker and scheduler deployments |
+| 🗄️ **Data** | PostgreSQL and Redis run alongside the app in Docker Compose | Fully managed, zone-redundant PostgreSQL and Redis from Azure |
+| 🚚 **Releases** | Tests run automatically, the image is published automatically, and the rollout is a deliberate manual command (GitHub Actions, `kubectl apply`) | Hands-off, audited rollouts driven from Git, secrets held in a vault, and HTTPS at the edge (GitOps, Key Vault, ingress with TLS) |
 
-# System
-DEBUG_MODE=False
-```
+The code is already cloud-friendly: the web tier keeps no state of its own, reports its own health, finishes in-flight work before shutting down, runs without admin rights, takes all its settings from the environment, and runs its scheduler as exactly one copy (stateless web tier, liveness and readiness endpoints, graceful `SIGTERM`, non-root user). → [Cloud and Kubernetes in the architecture guide](docs/ARCHITECTURE.md#cloud-and-kubernetes) · [Deployment runbook](docs/DEPLOYMENT.md)
 
-### Sync Knowledge Base (RAG)
+<a id="quickstart"></a>
 
-Required only when updating documents.
+## 🚀 Run it in 60 seconds
+
+No API keys, no cost: the defaults run the entire pipeline (queue, worker, audit trail, live stream) with deterministic mock agents.
 
 ```bash
-uv run python scripts/sync_knowledge_base.py
+git clone https://github.com/marekpdev/RealEstateApp.git && cd RealEstateApp
+cp .env.example .env          # OFFLINE_MODE=true: zero credentials, zero spend
+docker compose up --build     # postgres · redis · migrations · API + UI · worker · beat · nginx
 ```
 
-### Evaluate Retrieval Quality
+Open **http://localhost:8080** and try *"I would like to invest in Austin, TX with a max budget of $900,000."* The interactive API docs (Swagger UI) are at **http://localhost:8080/docs**.
 
-Scores dense/lexical/hybrid retrieval against a small hand-labelled query set
-and prints recall@k/MRR/nDCG@k for each - the actual defence against tuning
-retrieval by feel. Safe to run any time: it seeds its own synthetic corpus
-inside a transaction that's rolled back afterward, never touching the real
-synced `document_chunks` table.
+<details>
+<summary><b>Or talk to the API directly</b> (needs <code>jq</code>)</summary>
 
 ```bash
-uv run python scripts/evaluate_retrieval.py            # dense arm skipped if Pinecone isn't configured
-uv run python scripts/evaluate_retrieval.py --demo-dense  # stand-in dense arm, for a full worked example
+TOKEN=$(curl -s localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"demo@realestateapp.local","password":"demo-password-123"}' | jq -r .access_token)
+
+curl -s localhost:8080/api/v1/reports -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -H "Idempotency-Key: demo-$(date +%s)" \
+  -d '{"query":"Austin, TX, max budget $900,000"}'     # → 202 Accepted + a job id
 ```
 
-### Option 1: Running via CLI (Recommended for Development)
+Then follow the job live with `curl -N -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/reports/<id>/stream`. The full walkthrough is in [docs/API.md](docs/API.md).
 
-#### Run Application
-```bash
-# Run Web Interface (serves both the Chainlit UI and the /api/v1 HTTP API
-# it now talks to as a client - `chainlit run app.py` alone is no longer
-# enough, since it would start Chainlit's own dev server with no API
-# mounted alongside it for app.py to actually call)
-uv run uvicorn server:app --reload --port 8080
+</details>
 
-# Run CLI Mode
-uv run python cli.py
-```
+To run against real models and data (OpenAI, RapidAPI, Pinecone, Brave), or to develop locally with `uv`, see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
-### Option 2: Running via Docker
-```bash
-# Using Docker Compose
-docker-compose up --build
+<a id="documentation"></a>
 
-# Using Standard Docker Commands
-docker build -t realestateapp:local .
-docker run -p 8080:8080 --env-file .env realestateapp:local
-```
-*Access the app at `http://localhost:8080/`.*
+## 📚 Documentation
 
-With Docker Compose, that address is served by an NGINX reverse proxy (`nginx/default.conf`) sitting in front of the `web_app` container, which is no longer published to the host directly. The proxy applies buffering and timeout rules per path - in particular, it streams the `/api/v1/reports/{id}/stream` Server-Sent Events endpoint through unbuffered, so progress events reach the client as they happen instead of all at once when the job ends. `http://localhost:8080/nginx-health` answers from NGINX itself (proxy liveness); `/health` and `/health/ready` are proxied through to the app.
+| 👀 If you are... | Start with |
+|:--|:--|
+| a recruiter or hiring manager | this page, the video above, and [Cost optimization](docs/COST_OPTIMIZATION.md) |
+| an engineer reviewing the design | [Architecture](docs/ARCHITECTURE.md), then [Engineering decisions](docs/ENGINEERING_DECISIONS.md) |
+| an AI engineer | [Agentic AI design](docs/AGENTIC_AI.md) |
+| someone who wants to run it | [Getting started](docs/GETTING_STARTED.md) |
 
----
+| Document | What it covers |
+|:--|:--|
+| 🏛️ [**Architecture**](docs/ARCHITECTURE.md) | System design, request and job lifecycles, exactly-once effect, live streaming, reliability and failure behaviour, data model, security, cloud and Kubernetes |
+| 🧠 [**Agentic AI design**](docs/AGENTIC_AI.md) | The agent graph, MCP tooling, hybrid RAG, retrieval evaluation, guardrails, production hardening |
+| 💰 [**Cost optimization**](docs/COST_OPTIMIZATION.md) | Every cost lever in plain language, and what to optimize next |
+| ⚖️ [**Engineering decisions**](docs/ENGINEERING_DECISIONS.md) | 34 decisions: what was chosen, why, what was rejected, what it costs |
+| 🔌 [**API reference**](docs/API.md) | Endpoints, auth, idempotency, rate limits, the SSE protocol, Swagger UI, a verified curl walkthrough, and an [OpenAPI snapshot](docs/openapi.json) |
+| 🚀 [**Getting started**](docs/GETTING_STARTED.md) | Docker Compose, local development, configuration, going live, fault injection |
+| 🧪 [**Testing**](docs/TESTING.md) | Strategy, the harness, what is and is not covered |
+| ☁️ [**Deployment**](docs/DEPLOYMENT.md) | Azure runbook: Terraform, AKS, secrets, cost hibernation |
+| 📂 [**Project structure**](docs/PROJECT_STRUCTURE.md) | Where everything lives, and where to start reading |
 
-## 🌐 Production Cloud Deployment & DevOps
+<a id="whats-next"></a>
 
-The production infrastructure of this platform is engineered as reproducible, enterprise-ready cloud blueprints using Terraform and Kubernetes (AKS).
+## 🔮 What's next
 
-To ensure clean documentation architecture, all step-by-step terminal execution routines, context switching flags, resource hibernation sequences, and cluster troubleshooting commands have been isolated into a dedicated manual.
+- **Observability.** Integration of LangSmith or Arize Phoenix for deeper multi-agent trace analysis, execution monitoring and evaluation.
+- **Agentic self-correction.** A "critique" loop where the supervisor validates agent outputs against the initial user request.
+- **Multi-model fallbacks.** Automatically switching to alternative providers (for example Anthropic or local models) during API outages or rate limits.
 
-👉 Ready to deploy live to Microsoft Azure? Follow the comprehensive, step-by-step instructions in the [Production Cloud Deployment Guide](DEPLOYMENT.md).
+The engineering-level plans behind these, and the rest of the production-hardening list, are in [Production hardening](docs/AGENTIC_AI.md#production-hardening) and [Cloud and Kubernetes](docs/ARCHITECTURE.md#cloud-and-kubernetes).
 
-## 🧪 Testing & Mocking
+<div align="center">
 
-The application provides a comprehensive mocking suite for local development and CI testing to reduce API spend:
-*   **`OFFLINE_MODE`:** The master switch. Set to `true` (the default in `.env.example`) and the whole app - every agent mock below, plus the UI log translator - runs with zero credentials and zero network calls. Any code path that still attempts a real paid API call while `OFFLINE_MODE` is on raises immediately instead of silently spending money.
-*   **Agent Mocks:** Each agent can also be toggled individually to return pre-configured responses using environment variables:
-    *   `MOCK_INGEST_INPUT_AGENT_OUTPUT`
-    *   `MOCK_MARKET_DATA_AGENT_OUTPUT`
-    *   `MOCK_NEIGHBORHOOD_VIBE_AGENT_OUTPUT`
-    *   `MOCK_ZONING_LAW_AGENT_OUTPUT`
-    *   `MOCK_FINANCIAL_MODELER_AGENT_OUTPUT`
-*   **API Mocks:** `MOCK_MARKET_DATA_API` allows testing market logic without consuming RapidAPI credits.
+Built by [@marekpdev](https://github.com/marekpdev) &nbsp;·&nbsp; [💼 Connect on LinkedIn](https://www.linkedin.com/in/marekpszczolka94/)
 
----
+<sub>A portfolio project. Reports are generated by AI for demonstration and are not financial advice.</sub>
 
-## 📈 Optimization Strategies
-
-### 🎯 Advanced Prompt Engineering
-*   **Dynamic "Good Enough" Criteria:** Agents are primed with efficiency-first instructions to minimize LLM latency by stopping research once core criteria are met.
-*   **Few-Shot Prospectus Generation:** The Financial Modeler uses curated examples to ensure consistent, professional-grade markdown formatting.
-*   **System Message Specialization:** Each agent role is defined by a highly focused system prompt that restricts its scope to its specific domain, reducing hallucinations.
-
-### 💰 Cost Optimization Techniques
-*   **Model Tiering:** Leveraging different model tiers (e.g., GPT-4o-mini for routing/extraction and GPT-4o for final synthesis) to balance quality and cost.
-*   **Schema Sanitization:** Custom logic removes redundant JSON metadata from tool definitions before sending to the LLM.
-*   **Context Pruning:** Automatic truncation of massive tool outputs (e.g., web fetch results) to the most relevant 2000-4000 characters.
-*   **RAG Priority:** The Zoning agent is strictly instructed to prioritize local RAG data from Pinecone before falling back to expensive web searches.
-*   **Restrictive Tool Defaults:** Hard-coded limits on search results (e.g., max 3 results) and fetch lengths to prevent token-heavy data dumps.
-
----
-
-## 🔮 Future Roadmap
-
-*   **Semantic Caching:** Implementation of a vector-based cache for common market queries to further reduce API spend.
-*   **Observability:** Integration of **LangSmith** or **Arize Phoenix** for deeper multi-agent trace analysis, execution monitoring and evaluation.
-*   **Agentic Self-Correction:** Implementing a "Critique" loop where the Supervisor validates agent outputs against the initial user request.
-*   **Multi-Model Fallbacks:** Automatically switching to alternative providers (e.g., Anthropic or local models) in case of API outages or rate limits.
+</div>

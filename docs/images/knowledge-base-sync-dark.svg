@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 420" width="1100" height="420" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Knowledge-base sync: Celery Beat starts a locked sync task every six hours; it reads zoning-law PDFs from Azure Blob Storage, parses and chunks them, then writes the same chunks first to PostgreSQL full-text search and second to Pinecone embeddings.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker></defs>
+<rect x="30" y="40" width="170" height="96" rx="14" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="115.0" y="81.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Celery Beat</text>
+<text x="115.0" y="103.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >every 6 hours</text>
+<path d="M200 88 L246 88" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="250" y="40" width="250" height="96" rx="14" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="375.0" y="72.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Sync task</text>
+<text x="375.0" y="94.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >Redis lock (SET NX EX):</text>
+<text x="375.0" y="113.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >an overlapping run is a no-op</text>
+<path d="M500 88 L556 88" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="560" y="40" width="210" height="96" rx="14" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="665.0" y="81.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Azure Blob</text>
+<text x="665.0" y="103.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >zoning-law PDFs</text>
+<path d="M770 88 L826 88" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="830" y="40" width="240" height="96" rx="14" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="950.0" y="72.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Parse and chunk</text>
+<text x="950.0" y="94.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >pypdf → text → splitter</text>
+<text x="950.0" y="113.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >1000 chars, 100 overlap</text>
+<path d="M920 136 C920 191.0 685 191.0 685 246" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="684.0" y="183" width="172" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="770" y="198" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >1st: the same chunks</text>
+<path d="M990 136 C990 191.0 955 191.0 955 246" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="924.0" y="183" width="172" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="1010" y="198" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >2nd: the same chunks</text>
+<rect x="560" y="250" width="250" height="100" rx="14" fill="#3a2b0b" stroke="#d29922" stroke-width="2"/>
+<text x="685.0" y="284.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >PostgreSQL</text>
+<text x="685.0" y="306.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >document_chunks</text>
+<text x="685.0" y="325.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >tsvector + GIN index</text>
+<rect x="840" y="250" width="230" height="100" rx="14" fill="#3a2b0b" stroke="#d29922" stroke-width="2"/>
+<text x="955.0" y="284.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >Pinecone</text>
+<text x="955.0" y="306.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >OpenAI embeddings</text>
+<text x="955.0" y="325.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >behind a circuit breaker</text>
+<text x="30" y="262" font-size="13" font-weight="700" fill="#8b949e" text-anchor="start" letter-spacing="2">WHY IT IS BUILT THIS WAY</text>
+<circle cx="33" cy="283.5" r="2.6" fill="#8b949e"/>
+<text x="44" y="288" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >Same chunks in both indexes, so their</text>
+<text x="44" y="307" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >results can be compared and fused.</text>
+<circle cx="33" cy="331.5" r="2.6" fill="#8b949e"/>
+<text x="44" y="336" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >Postgres first, always: a Pinecone outage</text>
+<text x="44" y="355" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >never leaves the lexical index stale.</text>
+<circle cx="33" cy="379.5" r="2.6" fill="#8b949e"/>
+<text x="44" y="384" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >Full replace in one transaction: a document</text>
+<text x="44" y="403" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >removed at the source leaves search too.</text>
+</svg>

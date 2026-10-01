@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 250" width="1000" height="250" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Six highlights of the project: 3 agents research in parallel; 4 MCP tool servers give live web, map and Wikipedia data; 2 search methods, meaning and keywords, are combined; 240 plus automated tests run on a real database and message queue; 34 documented design decisions; and $0 to run the whole pipeline offline.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#475569"/></marker></defs>
+<rect x="4" y="4" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="20" y="26" width="5" height="64" rx="2.5" fill="#7c3aed"/>
+<text x="40" y="72" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >3</text>
+<text x="82.11840000000001" y="48" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >agents in parallel</text>
+<text x="82.11840000000001" y="70" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >market, area and zoning</text>
+<text x="82.11840000000001" y="89" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >researched at the same time</text>
+<rect x="342" y="4" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="358" y="26" width="5" height="64" rx="2.5" fill="#3b82f6"/>
+<text x="378" y="72" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >4</text>
+<text x="420.1184" y="48" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >MCP tool servers</text>
+<text x="420.1184" y="70" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >live web, maps and</text>
+<text x="420.1184" y="89" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >Wikipedia data</text>
+<rect x="680" y="4" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="696" y="26" width="5" height="64" rx="2.5" fill="#16a34a"/>
+<text x="716" y="72" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >2</text>
+<text x="758.1184" y="48" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >search methods</text>
+<text x="758.1184" y="70" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >meaning and keywords,</text>
+<text x="758.1184" y="89" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >combined for accuracy</text>
+<rect x="4" y="130" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="20" y="152" width="5" height="64" rx="2.5" fill="#d97706"/>
+<text x="40" y="198" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >240+</text>
+<text x="160.4736" y="174" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >automated tests</text>
+<text x="160.4736" y="196" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >run on a real database</text>
+<text x="160.4736" y="215" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >and message queue</text>
+<rect x="342" y="130" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="358" y="152" width="5" height="64" rx="2.5" fill="#6b7280"/>
+<text x="378" y="198" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >34</text>
+<text x="446.2368" y="174" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >design decisions</text>
+<text x="446.2368" y="196" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >documented with</text>
+<text x="446.2368" y="215" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >their trade-offs</text>
+<rect x="680" y="130" width="316" height="108" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+<rect x="696" y="152" width="5" height="64" rx="2.5" fill="#16a34a"/>
+<text x="716" y="198" font-size="44" font-weight="800" fill="#111827" text-anchor="start" >$0</text>
+<text x="784.2368" y="174" font-size="16" font-weight="700" fill="#111827" text-anchor="start" >to run offline</text>
+<text x="784.2368" y="196" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >the whole pipeline,</text>
+<text x="784.2368" y="215" font-size="13.5" font-weight="400" fill="#4b5563" text-anchor="start" >no API keys needed</text>
+</svg>

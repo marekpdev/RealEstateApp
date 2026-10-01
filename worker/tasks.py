@@ -35,8 +35,8 @@ end
 class SimulatedTaskFailure(Exception):
     """Raised only by generate_report's own config.TASK_FAILURE_INJECTION_COUNT
     check - a deliberate stand-in for a genuine infrastructure failure (a
-    dropped Postgres connection, a Redis blip) that this phase's retry/
-    backoff/DLQ machinery needs to be exercised against on demand, without
+    dropped Postgres connection, a Redis blip) that the retry/backoff/DLQ
+    machinery needs to be exercised against on demand, without
     actually having to break a real service to prove any of it works."""
 
 
@@ -188,12 +188,12 @@ def generate_report(self, raw_query: str, request_id: str, recursion_limit: int 
     task to the dead-letter queue instead of Celery quietly dropping it.
 
     config.TASK_FAILURE_INJECTION_COUNT is the deliberate failure-injection
-    knob this phase's own verification needs: set to N, the first N
-    physical attempts raise SimulatedTaskFailure before touching
-    run_claimed_request at all (self.request.retries counts *prior*
+    knob for exercising retries and the dead-letter queue on demand: set to
+    N, the first N physical attempts raise SimulatedTaskFailure before
+    touching run_claimed_request at all (self.request.retries counts *prior*
     retries, so the original attempt has retries=0). Left at 0 (the
-    default) this check is never true and behavior is identical to Phase
-    2.2's task.
+    default) this check is never true and the task behaves exactly as it
+    would without the knob.
     """
 
     async def _run() -> str:

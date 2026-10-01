@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 430" width="1080" height="430" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Job lifecycle: POST /reports creates a pending job; a worker's atomic claim moves it to running; it ends completed when the report is saved, or failed when an agent raised. A failed job can run again by a same-key replay or a manual replay from the dead-letter queue; when retries are exhausted the task is parked there.">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker></defs>
+<circle cx="40" cy="148" r="9" fill="#8b949e"/>
+<path d="M56 148 L196 148" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="67.0" y="125" width="118" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="126" y="140" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >POST /reports</text>
+<rect x="200" y="110" width="160" height="76" rx="14" fill="#3a2b0b" stroke="#d29922" stroke-width="2"/>
+<text x="280.0" y="141.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >pending</text>
+<text x="280.0" y="163.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >queued</text>
+<path d="M360 148 L506 148" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="362.0" y="125" width="142" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="433" y="140" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >worker claims it</text>
+<rect x="510" y="110" width="160" height="76" rx="14" fill="#2a2050" stroke="#a371f7" stroke-width="2"/>
+<text x="590.0" y="141.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >running</text>
+<text x="590.0" y="163.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >a worker owns it</text>
+<path d="M670 148 L816 148" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="687.0" y="125" width="112" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="743" y="140" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >report saved</text>
+<rect x="820" y="110" width="160" height="76" rx="14" fill="#12361f" stroke="#3fb950" stroke-width="2"/>
+<text x="900.0" y="141.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >completed</text>
+<text x="900.0" y="163.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >terminal</text>
+<path d="M980 148 L1018 148" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<circle cx="1038" cy="148" r="14" fill="none" stroke="#8b949e" stroke-width="2"/>
+<circle cx="1038" cy="148" r="9" fill="#8b949e"/>
+<rect x="510" y="300" width="160" height="76" rx="14" fill="#3d1418" stroke="#f85149" stroke-width="2"/>
+<text x="590.0" y="331.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >failed</text>
+<text x="590.0" y="353.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >error recorded</text>
+<path d="M560 186 L560 296" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<text x="548" y="246" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="end" >an agent raised</text>
+<path d="M620 296 L620 190" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<text x="632" y="240" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="start" >same-key replay, or</text>
+<text x="632" y="258" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="start" >a manual replay from the DLQ</text>
+<path d="M670 338 L816 338" fill="none" stroke="#8b949e" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="673.0" y="315" width="140" height="22" rx="6" fill="#0d1117" opacity="0.92"/>
+<text x="743" y="330" font-size="13.5" font-weight="600" fill="#9aa7b5" text-anchor="middle" >retries exhausted</text>
+<rect x="820" y="300" width="210" height="76" rx="14" fill="#21262d" stroke="#8b949e" stroke-width="2"/>
+<text x="925.0" y="331.0" font-size="17" font-weight="700" fill="#e6edf3" text-anchor="middle" >dead-letter queue</text>
+<text x="925.0" y="353.0" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="middle" >payload kept for replay</text>
+<text x="30" y="318" font-size="13" font-weight="700" fill="#8b949e" text-anchor="start" letter-spacing="2">ENFORCED BY SQL</text>
+<text x="30" y="344" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >The only way into running is one atomic</text>
+<text x="30" y="364" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >UPDATE … WHERE status IN ('pending','failed')</text>
+<text x="30" y="384" font-size="14" font-weight="400" fill="#9aa7b5" text-anchor="start" >RETURNING id. Whoever gets a row back owns the run.</text>
+</svg>
